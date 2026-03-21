@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Paper Trader</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #070a0f;
+  --s1: #0c1018;
+  --s2: #111620;
+  --s3: #16202e;
+  --border: #1a2535;
+  --green: #00d97e;
+  --red: #ff3b5c;
+  --yellow: #ffbe0b;
+  --blue: #3b82f6;
+  --cyan: #06b6d4;
+  --text: #c5cfe0;
+  --muted: #3d5068;
+  --font: 'IBM Plex Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; }
+body { background:var(--bg); color:var(--text); font-family:var(--font); font-size:12px; }
+
+/* Scanline effect */
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+}
+
+.layout { display:grid; grid-template-rows:56px 1fr; height:100vh; }
+
+/* TOP BAR */
+.topbar {
+  background:var(--s1); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 24px; gap:20px;
+  position:relative; z-index:10;
+}
+.topbar-logo { font-family:var(--display); font-size:17px; font-weight:800; color:#fff; letter-spacing:-0.5px; margin-right:8px; }
+.topbar-logo span { color:var(--green); }
+.pulse-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s infinite; flex-shrink:0; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+.topbar-status { font-size:10px; color:var(--muted); letter-spacing:1px; }
+.topbar-status.live { color:var(--green); }
+.topbar-right { margin-left:auto; display:flex; align-items:center; gap:20px; }
+.topbar-bankroll { text-align:right; }
+.topbar-bankroll-label { font-size:9px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; }
+.topbar-bankroll-val { font-family:var(--display); font-size:18px; font-weight:800; color:#fff; }
+.topbar-pl { font-size:11px; }
+
+/* BODY */
+.body { display:grid; grid-template-columns:320px 1fr; overflow:hidden; }
+
+/* LEFT PANEL */
+.left { background:var(--s1); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+
+.panel-title { padding:16px 18px 12px; font-size:9px; letter-spacing:2.5px; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); }
+
+/* API Setup */
+.api-setup { padding:16px 18px; border-bottom:1px solid var(--border); }
+.api-input-row { display:flex; gap:8px; margin-top:8px; }
+.api-input {
+  flex:1; background:var(--s2); border:1px solid var(--border); border-radius:5px;
+  padding:8px 10px; color:var(--text); font-family:var(--font); font-size:11px; outline:none;
+  transition:border-color 0.2s;
+}
+.api-input:focus { border-color:var(--cyan); }
+.api-input::placeholder { color:var(--muted); }
+.btn-sm {
+  padding:8px 12px; border-radius:5px; border:none; cursor:pointer;
+  font-family:var(--font); font-size:10px; font-weight:600; letter-spacing:0.5px;
+  transition:all 0.2s; white-space:nowrap;
+}
+.btn-cyan { background:var(--cyan); color:#000; }
+.btn-cyan:hover { background:#22d3ee; }
+.btn-green { background:var(--green); color:#000; }
+.btn-green:hover { background:#00f090; }
+.btn-red { background:var(--red); color:#fff; }
+.btn-ghost { background:transparent; border:1px solid var(--border); color:var(--muted); }
+.btn-ghost:hover { border-color:var(--text); color:var(--text); }
+
+.api-status { font-size:10px; margin-top:6px; min-height:16px; }
+.api-status.ok { color:var(--green); }
+.api-status.err { color:var(--red); }
+.api-status.loading { color:var(--yellow); }
+
+/* Strategy summary */
+.strategy-box { padding:14px 18px; border-bottom:1px solid var(--border); }
+.strat-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; }
+.strat-key { font-size:10px; color:var(--muted); }
+.strat-val { font-size:10px; color:var(--cyan); font-weight:600; }
+
+/* Live matches */
+.matches-scroll { flex:1; overflow-y:auto; }
+.match-card {
+  padding:14px 18px; border-bottom:1px solid var(--border);
+  cursor:pointer; transition:background 0.15s; position:relative;
+}
+.match-card:hover { background:var(--s2); }
+.match-card.signal { border-left:3px solid var(--green); }
+.match-card.no-signal { border-left:3px solid var(--border); opacity:0.6; }
+.match-teams { font-size:12px; font-weight:600; color:#fff; margin-bottom:5px; }
+.match-meta { display:flex; gap:12px; font-size:10px; color:var(--muted); margin-bottom:6px; }
+.match-score { font-family:var(--display); font-size:20px; font-weight:800; color:var(--yellow); }
+.match-minute { font-size:11px; color:var(--cyan); font-weight:600; }
+.match-odds-row { display:flex; gap:8px; margin-top:8px; align-items:center; }
+.odds-pill {
+  padding:3px 8px; border-radius:3px; font-size:10px; font-weight:600;
+  border:1px solid var(--border); background:var(--s2); color:var(--muted);
+}
+.odds-pill.target { border-color:var(--green); color:var(--green); background:rgba(0,217,126,0.08); }
+.signal-badge {
+  margin-left:auto; padding:4px 10px; border-radius:3px;
+  font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+}
+.signal-badge.go { background:rgba(0,217,126,0.15); color:var(--green); border:1px solid rgba(0,217,126,0.3); }
+.signal-badge.wait { background:rgba(255,190,11,0.1); color:var(--yellow); border:1px solid rgba(255,190,11,0.2); }
+.signal-badge.skip { background:rgba(255,59,92,0.1); color:var(--red); border:1px solid rgba(255,59,92,0.2); }
+
+.empty-matches { padding:40px 18px; text-align:center; color:var(--muted); }
+.empty-matches-icon { font-size:32px; margin-bottom:10px; }
+
+/* Refresh bar */
+.refresh-bar { padding:10px 18px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.refresh-timer { font-size:10px; color:var(--muted); margin-left:auto; }
+.progress-bar { height:3px; background:var(--border); border-radius:2px; overflow:hidden; flex:1; }
+.progress-fill { height:100%; background:var(--cyan); border-radius:2px; transition:width 1s linear; }
+
+/* RIGHT PANEL */
+.right { display:flex; flex-direction:column; overflow:hidden; }
+
+/* Tabs */
+.tabs { display:flex; border-bottom:1px solid var(--border); background:var(--s1); }
+.tab { padding:14px 20px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.15s; background:none; border-top:none; border-left:none; border-right:none; font-family:var(--font); }
+.tab.active { color:var(--green); border-bottom-color:var(--green); }
+.tab:hover:not(.active) { color:var(--text); }
+
+.tab-content { flex:1; overflow-y:auto; padding:20px 24px; }
+
+/* KPI strip */
+.kpi-strip { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+.kpi { background:var(--s1); border:1px solid var(--border); border-radius:7px; padding:14px; }
+.kpi-label { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+.kpi-val { font-family:var(--display); font-size:22px; font-weight:800; line-height:1; }
+.kpi-sub { font-size:9px; color:var(--muted); margin-top:4px; }
+.g { color:var(--green); } .r { color:var(--red); } .y { color:var(--yellow); } .c { color:var(--cyan); } .w { color:#fff; }
+
+/* Bet table */
+.bet-table-wrap { background:var(--s1); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:16px; }
+.bet-table { width:100%; border-collapse:collapse; }
+.bet-table th { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); padding:10px 14px; text-align:left; background:var(--s2); border-bottom:1px solid var(--border); }
+.bet-table td { padding:10px 14px; border-bottom:1px solid rgba(26,37,53,0.6); font-size:11px; }
+.bet-table tr:last-child td { border-bottom:none; }
+.bet-table tr:hover td { background:rgba(255,255,255,0.015); }
+.bet-table .pending td { opacity:0.7; }
+
+.tag { display:inline-block; padding:2px 6px; border-radius:3px; font-size:9px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; }
+.tag-g { background:rgba(0,217,126,0.12); color:var(--green); }
+.tag-r { background:rgba(255,59,92,0.12); color:var(--red); }
+.tag-y { background:rgba(255,190,11,0.12); color:var(--yellow); }
+.tag-c { background:rgba(6,182,212,0.12); color:var(--cyan); }
+
+/* Chart */
+.chart-wrap { background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; }
+.chart-label { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+
+/* Manual bet form */
+.manual-form { background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:16px; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px; }
+.form-group label { display:block; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+.form-group input, .form-group select {
+  width:100%; background:var(--s2); border:1px solid var(--border); border-radius:5px;
+  padding:8px 10px; color:var(--text); font-family:var(--font); font-size:11px; outline:none; transition:border-color 0.2s;
+}
+.form-group input:focus, .form-group select:focus { border-color:var(--cyan); }
+
+/* Notification */
+.notif {
+  position:fixed; bottom:24px; right:24px; z-index:1000;
+  background:var(--s2); border:1px solid var(--border); border-radius:8px;
+  padding:14px 18px; max-width:320px; font-size:11px; line-height:1.5;
+  transform:translateY(100px); opacity:0; transition:all 0.3s;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+}
+.notif.show { transform:translateY(0); opacity:1; }
+.notif.notif-green { border-color:rgba(0,217,126,0.4); }
+.notif.notif-yellow { border-color:rgba(255,190,11,0.4); }
+.notif.notif-red { border-color:rgba(255,59,92,0.4); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-logo">⚽ <span>LIVE</span>TRADER</div>
+  <div class="pulse-dot" id="liveDot" style="background:var(--muted);box-shadow:none"></div>
+  <div class="topbar-status" id="topStatus">API bağlantısı bekleniyor</div>
+  <div class="topbar-right">
+    <div style="font-size:10px;color:var(--muted);text-align:right;">
+      <div style="letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;">Strateji</div>
+      <div style="color:var(--cyan)">1-0 Ev Sahibi · 75+ dk · $10/bet</div>
+    </div>
+    <div class="topbar-bankroll">
+      <div class="topbar-bankroll-label">Sanal Bankroll</div>
+      <div class="topbar-bankroll-val" id="topBankroll">$1,000.00</div>
+    </div>
+    <div class="topbar-pl" id="topPL" style="color:var(--muted)">+$0.00</div>
+  </div>
+</div>
+
+<div class="body">
+
+<!-- LEFT: LIVE MATCHES -->
+<div class="left">
+  <div class="panel-title">⚡ Canlı Maçlar</div>
+
+  <!-- API Setup -->
+  <div class="api-setup">
+    <div style="font-size:10px;color:var(--muted);margin-bottom:4px;letter-spacing:1px;">NETLIFY PROXY</div>
+    <div class="api-input-row">
+      <button class="btn-sm btn-cyan" onclick="connectAPI()" style="width:100%">Baglan</button>
+    </div>
+    <div class="api-status" id="apiStatus">— api-sports.io · Ücretsiz 100 istek/gün</div>
+  </div>
+
+  <!-- Strategy summary -->
+  <div class="strategy-box">
+    <div class="strat-row"><span class="strat-key">Senaryo</span><span class="strat-val">1-0 Ev Sahibi Önde</span></div>
+    <div class="strat-row"><span class="strat-key">Dakika Eşiği</span><span class="strat-val">75+ dakika</span></div>
+    <div class="strat-row"><span class="strat-key">Oran Zonu</span><span class="strat-val">70-88¢ arası</span></div>
+    <div class="strat-row"><span class="strat-key">Bet Boyutu</span><span class="strat-val">$10 sabit</span></div>
+    <div class="strat-row"><span class="strat-key">Yenileme</span><span class="strat-val" id="refreshInterval">60 sn</span></div>
+  </div>
+
+  <!-- Live match list -->
+  <div class="matches-scroll" id="matchesList">
+    <div class="empty-matches">
+      <div class="empty-matches-icon">🔌</div>
+      <div style="font-size:11px;margin-bottom:6px;">API key gir ve bağlan</div>
+      <div style="font-size:10px;color:var(--muted);">Canlı maçlar otomatik yüklenecek</div>
+    </div>
+  </div>
+
+  <!-- Refresh bar -->
+  <div class="refresh-bar">
+    <button class="btn-sm btn-ghost" onclick="fetchLiveMatches()" id="refreshBtn" disabled>↻ Yenile</button>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="refresh-timer" id="refreshTimer">—</div>
+  </div>
+</div>
+
+<!-- RIGHT: DASHBOARD -->
+<div class="right">
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('dashboard',this)">Dashboard</button>
+    <button class="tab" onclick="showTab('betlog',this)">Bet Logu</button>
+    <button class="tab" onclick="showTab('manual',this)">Manuel Giriş</button>
+    <button class="tab" onclick="showTab('guide',this)">Kılavuz</button>
+  </div>
+
+  <!-- DASHBOARD TAB -->
+  <div class="tab-content" id="tab-dashboard">
+    <div class="kpi-strip">
+      <div class="kpi"><div class="kpi-label">Toplam Bet</div><div class="kpi-val w" id="kpiTotal">0</div><div class="kpi-sub">Oynanan</div></div>
+      <div class="kpi"><div class="kpi-label">Hit Rate</div><div class="kpi-val y" id="kpiHit">—</div><div class="kpi-sub">Kazanılan %</div></div>
+      <div class="kpi"><div class="kpi-label">Net P&L</div><div class="kpi-val g" id="kpiPL">$0.00</div><div class="kpi-sub">Toplam</div></div>
+      <div class="kpi"><div class="kpi-label">ROI</div><div class="kpi-val c" id="kpiROI">—</div><div class="kpi-sub">Yatırım getirisi</div></div>
+      <div class="kpi"><div class="kpi-label">Bekleyen</div><div class="kpi-val y" id="kpiPending">0</div><div class="kpi-sub">Sonuç bekleniyor</div></div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-label">Bankroll Eğrisi</div>
+      <canvas id="bankrollChart" height="140"></canvas>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-label">Son 20 Bet — P&L</div>
+      <canvas id="plBars" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- BET LOG TAB -->
+  <div class="tab-content" id="tab-betlog" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--muted)" id="betlogCount">0 bet kaydedildi</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sm btn-ghost" onclick="exportCSV()">↓ CSV İndir</button>
+        <button class="btn-sm btn-red" onclick="clearAll()" style="font-size:9px;">Sıfırla</button>
+      </div>
+    </div>
+    <div class="bet-table-wrap">
+      <table class="bet-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Maç</th><th>Dk</th><th>Oran</th>
+            <th>Edge</th><th>Durum</th><th>Sonuç</th><th>P&L</th>
+          </tr>
+        </thead>
+        <tbody id="betLogBody">
+          <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">Henüz bet yok</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MANUAL TAB -->
+  <div class="tab-content" id="tab-manual" style="display:none">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.8;">
+      API bağlantısı olmadan veya elle bet eklemek için kullan.<br>
+      Maç bitince "Sonuç Gir" ile kazanıp kaybettiğini işaretle.
+    </div>
+    <div class="manual-form">
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);margin-bottom:14px;">YENİ BET EKLE</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ev Sahibi</label>
+          <input type="text" id="mHome" placeholder="Man City">
+        </div>
+        <div class="form-group">
+          <label>Deplasman</label>
+          <input type="text" id="mAway" placeholder="Arsenal">
+        </div>
+        <div class="form-group">
+          <label>Dakika</label>
+          <input type="number" id="mMinute" value="78" min="75" max="90">
+        </div>
+        <div class="form-group">
+          <label>Market Oranı (¢)</label>
+          <input type="number" id="mOdds" value="78" min="1" max="99">
+        </div>
+        <div class="form-group">
+          <label>Lig</label>
+          <select id="mLeague">
+            <option>Premier League</option>
+            <option>La Liga</option>
+            <option>Bundesliga</option>
+            <option>Serie A</option>
+            <option>Ligue 1</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Bet ($)</label>
+          <input type="number" id="mBetSize" value="10">
+        </div>
+      </div>
+      <button class="btn-sm btn-green" onclick="addManualBet()">+ Bet Ekle (Beklemede)</button>
+    </div>
+
+    <div class="manual-form" style="margin-top:0;">
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);margin-bottom:14px;">BEKLEYEN BETLERE SONUÇ GİR</div>
+      <div id="pendingList" style="color:var(--muted);font-size:11px;">Bekleyen bet yok.</div>
+    </div>
+  </div>
+
+  <!-- GUIDE TAB -->
+  <div class="tab-content" id="tab-guide" style="display:none">
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:20px;line-height:2;font-size:11px;">
+      <div style="font-family:var(--display);font-size:16px;color:#fff;margin-bottom:16px;">Nasıl Kullanılır</div>
+
+      <div style="color:var(--cyan);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">1 — API KEY AL</div>
+      <div style="color:var(--muted);margin-bottom:16px;">
+        dashboard.api-football.com adresine git → Register → API Key kopyala.<br>
+        Sol panelde "API key yapıştır" kutusuna yapıştır → Bağlan'a tıkla.
+      </div>
+
+      <div style="color:var(--cyan);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">2 — CANLI MAÇ TAKİBİ</div>
+      <div style="color:var(--muted);margin-bottom:16px;">
+        Bağlandıktan sonra sistem her 60 saniyede canlı maçları çeker.<br>
+        Strateji filtresi (1-0 ev sahibi + 75+ dk) otomatik uygulanır.<br>
+        <span style="color:var(--green)">YEŞİL kart = SİNYAL</span> → Polymarket'te YES al, sisteme kaydet.<br>
+        <span style="color:var(--yellow)">SARI kart</span> = Kriterlere yakın, takipte tut.
+      </div>
+
+      <div style="color:var(--cyan);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">3 — BET KAYDET</div>
+      <div style="color:var(--muted);margin-bottom:16px;">
+        Sinyal gelen maçta "BET KAYDET" butonuna tıkla.<br>
+        Maç bitince sonucu otomatik çeker (API varsa) veya Manuel sekmesinden gir.<br>
+        P&L otomatik hesaplanır, bankroll güncellenir.
+      </div>
+
+      <div style="color:var(--cyan);font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">4 — KRİTİK UYARILAR</div>
+      <div style="color:var(--muted);">
+        ⚠️ Polymarket'te sadece FUTBOL maçları olan marketleri ara.<br>
+        ⚠️ Hacim kontrolü yap: market $50K+ olmalı.<br>
+        ⚠️ Bu paper trading — gerçek para yatırma.<br>
+        ⚠️ En az 30-50 bet sonra istatistikleri değerlendir.
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+</div>
+
+<!-- Notification -->
+<div class="notif" id="notif"></div>
+
+<script>
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'livetrader_v1';
+let appState = loadState();
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return { bankroll: 1000, bets: [], apiKey: '' };
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch(e) {}
+}
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+let refreshTimer = null;
+let refreshCountdown = 60;
+
+// Netlify Function proxy — CORS sorunsuz
+function apiHeaders(key) {
+  return {}; // key sunucu tarafında env variable olarak kullanılıyor
+}
+function apiUrl(path) {
+  return '/.netlify/functions/football?path=' + encodeURIComponent(path);
+}
+
+async function connectAPI() {
+  setAPIStatus('loading', 'Bağlanıyor...');
+  try {
+    const res = await fetch(apiUrl('/status'));
+    if (!res.ok) {
+      setAPIStatus('err', 'Netlify Function hatası: ' + res.status + ' — football.js deploy edildi mi?');
+      return;
+    }
+    const data = await res.json();
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      const errMsg = Object.values(data.errors)[0];
+      setAPIStatus('err', 'API hatası: ' + errMsg + ' — Environment variable kontrol et');
+      return;
+    }
+    const used  = data.response?.requests?.current   || 0;
+    const limit = data.response?.requests?.limit_day || 100;
+    appState.apiKey = 'netlify-proxy';
+    saveState();
+    setAPIStatus('ok', 'Baglandi · ' + used + '/' + limit + ' istek kullanildi bugun');
+    document.getElementById('liveDot').style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;flex-shrink:0';
+    document.getElementById('topStatus').textContent = 'CANLI';
+    document.getElementById('topStatus').className = 'topbar-status live';
+    document.getElementById('refreshBtn').disabled = false;
+    showNotif('API baglantisi kuruldu!', 'green');
+    fetchLiveMatches();
+    startRefreshTimer();
+  } catch(err) {
+    setAPIStatus('err', 'Hata: ' + err.message);
+  }
+}
+
+function setAPIStatus(type, msg) {
+  const el = document.getElementById('apiStatus');
+  el.textContent = msg;
+  el.className = 'api-status ' + (type === 'ok' ? 'ok' : type === 'err' ? 'err' : 'loading');
+}
+
+async function fetchLiveMatches() {
+  if (!appState.apiKey) return;
+  try {
+    const res = await fetch(apiUrl('/fixtures?live=all'), { headers: apiHeaders(appState.apiKey) });
+    const data = await res.json();
+    const fixtures = data.response || [];
+    renderMatches(fixtures);
+  } catch(err) {
+    showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
+  }
+}
+
+function renderMatches(fixtures) {
+  const container = document.getElementById('matchesList');
+
+  // Filter: only football, ongoing
+  const live = fixtures.filter(f => {
+    const elapsed = f.fixture?.status?.elapsed || 0;
+    return elapsed >= 70; // show matches 70+ min for awareness
+  });
+
+  if (!live.length) {
+    container.innerHTML = `
+      <div class="empty-matches">
+        <div class="empty-matches-icon">⏳</div>
+        <div style="font-size:11px;margin-bottom:6px;">Uygun maç bulunamadı</div>
+        <div style="font-size:10px;color:var(--muted);">70+ dakikada maç yok şu an</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = live.map(f => {
+    const home = f.teams?.home?.name || '?';
+    const away = f.teams?.away?.name || '?';
+    const hGoals = f.goals?.home ?? 0;
+    const aGoals = f.goals?.away ?? 0;
+    const elapsed = f.fixture?.status?.elapsed || 0;
+    const league = f.league?.name || '';
+    const fixtureId = f.fixture?.id;
+
+    // Strategy signal check
+    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= 75;
+    const isNear   = hGoals === 1 && aGoals === 0 && elapsed >= 70 && elapsed < 75;
+
+    // Estimate market odds (placeholder — real odds come from Polymarket)
+    const estOdds = Math.round((82 + (elapsed - 75) * 0.6) * 10) / 10;
+    const signalClass = isTarget ? 'go' : isNear ? 'wait' : 'skip';
+    const signalText = isTarget ? 'SİNYAL' : isNear ? 'YAKLAŞIYOR' : 'FİLTRE DIŞI';
+    const cardClass = isTarget ? 'signal' : isNear ? '' : 'no-signal';
+
+    return `
+    <div class="match-card ${cardClass}" onclick="selectMatch(${fixtureId},'${home}','${away}',${hGoals},${aGoals},${elapsed},${estOdds})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="match-teams">${home} <span style="color:var(--muted)">vs</span> ${away}</div>
+          <div class="match-meta">
+            <span>${league}</span>
+            <span class="match-minute">${elapsed}'</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="match-score">${hGoals} – ${aGoals}</div>
+        </div>
+      </div>
+      <div class="match-odds-row">
+        <div class="odds-pill ${isTarget ? 'target' : ''}">~${estOdds}¢ EST.</div>
+        <div class="odds-pill" style="font-size:9px;color:var(--muted)">Polymarket'te kontrol et</div>
+        <div class="signal-badge ${signalClass}">${signalText}</div>
+      </div>
+      ${isTarget ? `<button class="btn-sm btn-green" style="margin-top:10px;width:100%;font-size:10px;" onclick="event.stopPropagation();quickBet(${fixtureId},'${home}','${away}',${elapsed},${estOdds})">+ $10 Bet Kaydet</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function quickBet(id, home, away, minute, estOdds) {
+  const bet = {
+    id: Date.now(),
+    fixtureId: id,
+    home, away, minute,
+    marketOdds: estOdds,
+    stake: 10,
+    status: 'pending',
+    result: null,
+    pnl: null,
+    ts: new Date().toISOString(),
+    edge: (87 + (minute-75)*0.6 - estOdds).toFixed(1)
+  };
+  appState.bets.push(bet);
+  saveState();
+  updateAll();
+  showNotif(`✓ Bet kaydedildi: ${home} vs ${away} · ${minute}' · ${estOdds}¢`, 'green');
+  renderPendingList();
+}
+
+// ─── MANUAL BET ───────────────────────────────────────────────────────────────
+function addManualBet() {
+  const home = document.getElementById('mHome').value.trim() || 'Ev Sahibi';
+  const away = document.getElementById('mAway').value.trim() || 'Deplasman';
+  const minute = parseInt(document.getElementById('mMinute').value) || 78;
+  const odds = parseInt(document.getElementById('mOdds').value) || 78;
+  const league = document.getElementById('mLeague').value;
+  const stake = parseFloat(document.getElementById('mBetSize').value) || 10;
+
+  if (odds < 70 || odds > 88) {
+    showNotif('⚠️ Oran 70-88¢ aralığı dışında — yine de eklendi', 'yellow');
+  }
+
+  const trueProb = 82 + (minute - 75) * 0.6;
+  const edge = (trueProb - odds).toFixed(1);
+
+  const bet = {
+    id: Date.now(), fixtureId: null,
+    home, away, minute, marketOdds: odds, stake,
+    league, status: 'pending', result: null, pnl: null,
+    ts: new Date().toISOString(), edge
+  };
+  appState.bets.push(bet);
+  saveState();
+  updateAll();
+  renderPendingList();
+  showNotif(`✓ Manuel bet eklendi: ${home} vs ${away}`, 'green');
+}
+
+function renderPendingList() {
+  const pending = appState.bets.filter(b => b.status === 'pending');
+  const el = document.getElementById('pendingList');
+  if (!pending.length) { el.innerHTML = '<span style="color:var(--muted)">Bekleyen bet yok.</span>'; return; }
+
+  el.innerHTML = pending.map(b => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;font-size:11px;">${b.home} vs ${b.away} · <span style="color:var(--cyan)">${b.minute}'</span> · ${b.marketOdds}¢</div>
+      <button class="btn-sm btn-green" onclick="settlebet(${b.id},true)" style="font-size:9px;padding:5px 10px;">✓ Kazandı</button>
+      <button class="btn-sm btn-red" onclick="settlebet(${b.id},false)" style="font-size:9px;padding:5px 10px;">✗ Kaybetti</button>
+    </div>`).join('');
+}
+
+function settlebet(id, won) {
+  const bet = appState.bets.find(b => b.id === id);
+  if (!bet) return;
+  const payout = 1 / (bet.marketOdds / 100);
+  const gross = won ? bet.stake * payout : 0;
+  const fee = gross * 0.02;
+  const net = won ? gross - fee - bet.stake : -bet.stake;
+
+  bet.result = won ? 'won' : 'lost';
+  bet.pnl = parseFloat(net.toFixed(2));
+  bet.status = 'settled';
+  appState.bankroll += bet.pnl;
+  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
+
+  saveState();
+  updateAll();
+  renderPendingList();
+  showNotif(won ? `✓ Kazandı! +$${(gross - fee - bet.stake).toFixed(2)}` : `✗ Kaybetti -$${bet.stake}`, won ? 'green' : 'red');
+}
+
+// ─── AUTO SETTLE (API) ────────────────────────────────────────────────────────
+async function checkPendingResults() {
+  if (!appState.apiKey) return;
+  const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
+  for (const bet of pending) {
+    try {
+      const res = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId), { headers: apiHeaders(appState.apiKey) });
+      const data = await res.json();
+      const f = data.response?.[0];
+      if (!f) continue;
+      const statusShort = f.fixture?.status?.short;
+      if (statusShort === 'FT' || statusShort === 'AET') {
+        const hGoals = f.goals?.home ?? 0;
+        const aGoals = f.goals?.away ?? 0;
+        const won = hGoals > aGoals; // home win
+        settlebet(bet.id, won);
+      }
+    } catch(e) {}
+  }
+}
+
+// ─── UI UPDATES ───────────────────────────────────────────────────────────────
+function updateAll() {
+  const settled = appState.bets.filter(b => b.status === 'settled');
+  const pending = appState.bets.filter(b => b.status === 'pending');
+  const wins = settled.filter(b => b.result === 'won').length;
+  const totalPL = settled.reduce((s, b) => s + b.pnl, 0);
+  const hitRate = settled.length ? (wins / settled.length * 100).toFixed(1) : null;
+  const roi = settled.length ? (totalPL / (settled.length * 10) * 100).toFixed(1) : null;
+
+  // Topbar
+  document.getElementById('topBankroll').textContent = '$' + appState.bankroll.toFixed(2);
+  const initPL = appState.bankroll - 1000;
+  document.getElementById('topPL').textContent = (initPL >= 0 ? '+' : '') + '$' + initPL.toFixed(2);
+  document.getElementById('topPL').style.color = initPL >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // KPIs
+  document.getElementById('kpiTotal').textContent = appState.bets.length;
+  document.getElementById('kpiHit').textContent = hitRate ? hitRate + '%' : '—';
+  document.getElementById('kpiHit').className = 'kpi-val ' + (hitRate >= 82 ? 'g' : hitRate >= 75 ? 'y' : hitRate ? 'r' : 'y');
+  document.getElementById('kpiPL').textContent = (totalPL >= 0 ? '+' : '') + '$' + totalPL.toFixed(2);
+  document.getElementById('kpiPL').className = 'kpi-val ' + (totalPL >= 0 ? 'g' : 'r');
+  document.getElementById('kpiROI').textContent = roi ? (roi >= 0 ? '+' : '') + roi + '%' : '—';
+  document.getElementById('kpiROI').className = 'kpi-val ' + (roi >= 0 ? 'g' : roi !== null ? 'r' : 'c');
+  document.getElementById('kpiPending').textContent = pending.length;
+  document.getElementById('betlogCount').textContent = appState.bets.length + ' bet kaydedildi';
+
+  // Bet log
+  renderBetLog();
+
+  // Charts
+  drawBankrollChart();
+  drawPLBars();
+}
+
+function renderBetLog() {
+  const body = document.getElementById('betLogBody');
+  if (!appState.bets.length) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">Henüz bet yok</td></tr>';
+    return;
+  }
+  const sorted = [...appState.bets].reverse();
+  body.innerHTML = sorted.map((b, i) => {
+    const statusTag = b.status === 'pending'
+      ? '<span class="tag tag-y">BEKL.</span>'
+      : b.result === 'won' ? '<span class="tag tag-g">KAZANDI</span>' : '<span class="tag tag-r">KAYBETTİ</span>';
+    const pnlStr = b.pnl !== null ? (b.pnl >= 0 ? '+' : '') + '$' + b.pnl : '—';
+    const pnlColor = b.pnl > 0 ? 'var(--green)' : b.pnl < 0 ? 'var(--red)' : 'var(--muted)';
+    return `<tr class="${b.status === 'pending' ? 'pending' : ''}">
+      <td style="color:var(--muted)">${appState.bets.length - i}</td>
+      <td>${b.home} <span style="color:var(--muted)">vs</span> ${b.away}</td>
+      <td><span style="color:var(--cyan)">${b.minute}'</span></td>
+      <td>${b.marketOdds}¢</td>
+      <td style="color:var(--green)">+${b.edge}pp</td>
+      <td>${statusTag}</td>
+      <td>${b.status==='pending' ? `<button class="btn-sm btn-green" onclick="settlebet(${b.id},true)" style="font-size:9px;padding:3px 8px;margin-right:4px;">W</button><button class="btn-sm btn-red" onclick="settlebet(${b.id},false)" style="font-size:9px;padding:3px 8px;">L</button>` : (b.result === 'won' ? '✓' : '✗')}</td>
+      <td style="color:${pnlColor};font-weight:600">${pnlStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function drawBankrollChart() {
+  const canvas = document.getElementById('bankrollChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.offsetWidth - 32;
+  const H = 140;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  // Build history from settled bets
+  const settled = appState.bets.filter(b => b.status === 'settled').sort((a,b) => a.id - b.id);
+  let history = [1000];
+  let running = 1000;
+  settled.forEach(b => { running += b.pnl; history.push(parseFloat(running.toFixed(2))); });
+
+  if (history.length < 2) {
+    ctx.fillStyle = 'var(--muted)'; ctx.font = '11px IBM Plex Mono'; ctx.textAlign = 'center';
+    ctx.fillText('Bet sonuçlandıkça grafik çizilecek', W/2, H/2);
+    return;
+  }
+
+  const pad = {l:55,r:10,t:10,b:20};
+  const cw = W-pad.l-pad.r, ch = H-pad.t-pad.b;
+  const min = Math.min(...history)*0.998, max = Math.max(...history)*1.002;
+  function tx(i){return pad.l+(i/(history.length-1))*cw;}
+  function ty(v){return pad.t+ch-((v-min)/(max-min))*ch;}
+
+  // Grid
+  ctx.strokeStyle='rgba(26,37,53,0.8)'; ctx.lineWidth=1;
+  [0,1,2,3].forEach(i=>{
+    const y=pad.t+(ch/3)*i;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+cw,y); ctx.stroke();
+    const v=max-((max-min)/3)*i;
+    ctx.fillStyle='#3d5068'; ctx.font='9px IBM Plex Mono'; ctx.textAlign='right';
+    ctx.fillText('$'+Math.round(v), pad.l-4, y+3);
+  });
+
+  // Start line
+  ctx.strokeStyle='rgba(61,130,246,0.3)'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l,ty(1000)); ctx.lineTo(pad.l+cw,ty(1000)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Fill
+  const last = history[history.length-1];
+  const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+ch);
+  grad.addColorStop(0, last>=1000?'rgba(0,217,126,0.18)':'rgba(255,59,92,0.18)');
+  grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();
+  history.forEach((v,i)=>i===0?ctx.moveTo(tx(i),ty(v)):ctx.lineTo(tx(i),ty(v)));
+  ctx.lineTo(tx(history.length-1),pad.t+ch); ctx.lineTo(pad.l,pad.t+ch); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+
+  ctx.beginPath(); ctx.strokeStyle=last>=1000?'var(--green)':'var(--red)'; ctx.lineWidth=2;
+  history.forEach((v,i)=>i===0?ctx.moveTo(tx(i),ty(v)):ctx.lineTo(tx(i),ty(v)));
+  ctx.stroke();
+}
+
+function drawPLBars() {
+  const canvas = document.getElementById('plBars');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.offsetWidth - 32;
+  const H = 100;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0,0,W,H);
+
+  const settled = appState.bets.filter(b=>b.status==='settled').slice(-20);
+  if (!settled.length) {
+    ctx.fillStyle='#3d5068'; ctx.font='10px IBM Plex Mono'; ctx.textAlign='center';
+    ctx.fillText('Sonuçlanan bet bekleniyor', W/2, H/2); return;
+  }
+
+  const pad={l:40,r:10,t:10,b:10};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const maxPL=Math.max(Math.abs(Math.min(...settled.map(b=>b.pnl))), Math.max(...settled.map(b=>b.pnl)), 5);
+  const bw=cw/settled.length-2;
+
+  ctx.strokeStyle='rgba(26,37,53,0.6)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad.l,pad.t+ch/2); ctx.lineTo(pad.l+cw,pad.t+ch/2); ctx.stroke();
+  ctx.fillStyle='#3d5068'; ctx.font='9px IBM Plex Mono'; ctx.textAlign='right';
+  ctx.fillText('+$'+maxPL.toFixed(0), pad.l-3, pad.t+5);
+  ctx.fillText('-$'+maxPL.toFixed(0), pad.l-3, pad.t+ch);
+
+  settled.forEach((b,i)=>{
+    const x=pad.l+i*(cw/settled.length)+2;
+    const mid=pad.t+ch/2;
+    const h=Math.abs(b.pnl)/maxPL*(ch/2);
+    ctx.fillStyle=b.pnl>=0?'rgba(0,217,126,0.75)':'rgba(255,59,92,0.75)';
+    ctx.fillRect(x, b.pnl>=0?mid-h:mid, bw, h||1);
+  });
+}
+
+// ─── REFRESH TIMER ────────────────────────────────────────────────────────────
+function startRefreshTimer() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshCountdown = 60;
+  refreshTimer = setInterval(() => {
+    refreshCountdown--;
+    const pct = ((60 - refreshCountdown) / 60) * 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('refreshTimer').textContent = refreshCountdown + 's';
+    if (refreshCountdown <= 0) {
+      fetchLiveMatches();
+      checkPendingResults();
+      refreshCountdown = 60;
+    }
+  }, 1000);
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(t=>t.style.display='none');
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).style.display='block';
+  btn.classList.add('active');
+  if (id === 'manual') renderPendingList();
+}
+
+function showNotif(msg, type='green') {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.className = `notif notif-${type} show`;
+  setTimeout(()=>el.classList.remove('show'), 3500);
+}
+
+function exportCSV() {
+  if (!appState.bets.length) { showNotif('Export edilecek bet yok', 'yellow'); return; }
+  const header = 'ID,Home,Away,Minute,Odds,Edge,Status,Result,PnL,Timestamp\n';
+  const rows = appState.bets.map(b =>
+    `${b.id},"${b.home}","${b.away}",${b.minute},${b.marketOdds},${b.edge},${b.status},${b.result||''},${b.pnl||''},"${b.ts}"`
+  ).join('\n');
+  const blob = new Blob([header+rows], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'paper_trading_log.csv';
+  a.click();
+}
+
+function clearAll() {
+  if (!confirm('Tüm bet logu ve bankroll sıfırlansın mı?')) return;
+  appState = { bankroll: 1000, bets: [], apiKey: appState.apiKey };
+  saveState();
+  updateAll();
+  showNotif('Sıfırlandı', 'yellow');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // Restore API key if saved
+  if (appState.apiKey) {
+    document.getElementById('apiKeyInput').value = appState.apiKey;
+    setAPIStatus('ok', '✓ Kayıtlı key yüklendi — Bağlan\'a tıkla');
+  }
+  updateAll();
+});
+
+window.addEventListener('resize', () => {
+  drawBankrollChart();
+  drawPLBars();
+});
+</script>
+</body>
+</html>
