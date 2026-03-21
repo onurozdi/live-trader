@@ -252,9 +252,9 @@ body::before {
     <div class="strat-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
       <span class="strat-key">Aktif Pencere</span>
       <div style="display:flex;gap:6px;align-items:center;width:100%;">
-        <input type="time" id="winStart" value="19:00" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;">
-        <span style="color:var(--muted);">to</span>
-        <input type="time" id="winEnd" value="23:00" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;">
+        <input type="time" id="winStart" value="19:00" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;" step="300">
+        <span style="color:var(--muted);">→</span>
+        <input type="time" id="winEnd" value="23:00" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;" step="300">
       </div>
       <div id="winStatus" style="font-size:10px;color:var(--muted);">— pencere kontrolü</div>
     </div>
@@ -612,10 +612,13 @@ function quickBet(id, home, away, minute, estOdds, auto = false) {
     ts: new Date().toISOString(),
     edge: (87 + (minute-75)*0.6 - estOdds).toFixed(1)
   };
+  // Stake'i hemen bankroll'den düş
+  appState.bankroll -= bet.stake;
+  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
   appState.bets.push(bet);
   saveState();
   updateAll();
-  showNotif(`✓ Bet kaydedildi: ${home} vs ${away} · ${minute}' · ${estOdds}¢`, 'green');
+  if (!auto) showNotif(`✓ Bet kaydedildi: ${home} vs ${away} · ${minute}' · ${estOdds}¢`, 'green');
   renderPendingList();
 }
 
@@ -641,6 +644,9 @@ function addManualBet() {
     league, status: 'pending', result: null, pnl: null,
     ts: new Date().toISOString(), edge
   };
+  // Stake'i hemen bankroll'den düş
+  appState.bankroll -= bet.stake;
+  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
   appState.bets.push(bet);
   saveState();
   updateAll();
@@ -663,42 +669,76 @@ function renderPendingList() {
 
 function settlebet(id, won) {
   const bet = appState.bets.find(b => b.id === id);
-  if (!bet) return;
+  if (!bet || bet.status === 'settled') return;
+
   const payout = 1 / (bet.marketOdds / 100);
-  const gross = won ? bet.stake * payout : 0;
-  const fee = gross * 0.02;
-  const net = won ? gross - fee - bet.stake : -bet.stake;
+  const gross  = won ? bet.stake * payout : 0;
+  const fee    = gross * 0.02;
+  const net    = won ? gross - fee - bet.stake : -bet.stake;
 
   bet.result = won ? 'won' : 'lost';
-  bet.pnl = parseFloat(net.toFixed(2));
+  bet.pnl    = parseFloat(net.toFixed(2));
   bet.status = 'settled';
-  appState.bankroll += bet.pnl;
-  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
+
+  // Stake zaten düşülmüştü — kazanınca geri al + kar ekle, kaybedince hiçbir şey yapma
+  if (won) {
+    appState.bankroll += bet.stake + (gross - fee - bet.stake); // stake iade + net kar
+    appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
+  }
+  // Kaybedince stake zaten düşülmüştü, ekstra işlem yok
 
   saveState();
   updateAll();
   renderPendingList();
-  showNotif(won ? `✓ Kazandı! +$${(gross - fee - bet.stake).toFixed(2)}` : `✗ Kaybetti -$${bet.stake}`, won ? 'green' : 'red');
+  showNotif(
+    won
+      ? `✓ Kazandı! +$${(gross - fee - bet.stake).toFixed(2)} · Bankroll: $${appState.bankroll.toFixed(2)}`
+      : `✗ Kaybetti -$${bet.stake} · Bankroll: $${appState.bankroll.toFixed(2)}`,
+    won ? 'green' : 'red'
+  );
 }
 
 // ─── AUTO SETTLE (API) ────────────────────────────────────────────────────────
 async function checkPendingResults() {
   if (!appState.apiKey) return;
   const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
+  if (!pending.length) return;
+
   for (const bet of pending) {
     try {
-      const res = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId), { headers: apiHeaders(appState.apiKey) });
+      const res  = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId));
       const data = await res.json();
-      const f = data.response?.[0];
+      const f    = data.response?.[0];
       if (!f) continue;
+
       const statusShort = f.fixture?.status?.short;
-      if (statusShort === 'FT' || statusShort === 'AET') {
+      const elapsed     = f.fixture?.status?.elapsed || 0;
+
+      // Maç bittiyse sonucu al
+      if (statusShort === 'FT' || statusShort === 'AET' || statusShort === 'PEN') {
         const hGoals = f.goals?.home ?? 0;
         const aGoals = f.goals?.away ?? 0;
-        const won = hGoals > aGoals; // home win
+        const won    = hGoals > aGoals; // ev sahibi kazandı mı?
         settlebet(bet.id, won);
+        showNotif(
+          won
+            ? '✓ ' + bet.home + ' kazandı! +$' + (bet.stake * (1/(bet.marketOdds/100)) - bet.stake).toFixed(2)
+            : '✗ ' + bet.home + ' kaybetti -$' + bet.stake,
+          won ? 'green' : 'red'
+        );
       }
-    } catch(e) {}
+      // Maç devam ediyorsa skor değiştiyse kontrol et (0-0 veya berabere düştüyse void)
+      else if (statusShort === '2H' || statusShort === 'ET') {
+        const hGoals = f.goals?.home ?? 0;
+        const aGoals = f.goals?.away ?? 0;
+        // Skor artık 1-0 değilse (gol yedik veya eşitlik bozuldu) erken uyarı
+        if (hGoals !== 1 || aGoals !== 0) {
+          showNotif('⚠️ Skor değişti: ' + bet.home + ' ' + hGoals + '-' + aGoals + ' ' + bet.away, 'yellow');
+        }
+      }
+    } catch(e) {
+      console.log('Sonuç kontrol hatası:', e.message);
+    }
   }
 }
 
@@ -870,14 +910,36 @@ function updateAutoBet() {
   showNotif(autoBetEnabled ? '🤖 Otomatik bet açıldı — sinyal gelince otomatik kaydeder' : 'Otomatik bet kapatıldı', autoBetEnabled ? 'green' : 'yellow');
 }
 
+function toMins(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function nowMins() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function nowStr() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  return h + ':' + m;
+}
+
 function isInWindow() {
   const start = document.getElementById('winStart')?.value || '00:00';
   const end   = document.getElementById('winEnd')?.value   || '23:59';
-  const now   = new Date();
-  const cur   = now.getHours() * 60 + now.getMinutes();
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  return cur >= (sh * 60 + sm) && cur <= (eh * 60 + em);
+  const cur   = nowMins();
+  const s     = toMins(start);
+  const e     = toMins(end);
+  // Pencere: start'tan end'e kadar aktif, end geçince kapanır
+  if (s <= e) {
+    return cur >= s && cur < e;
+  } else {
+    // Gece yarısını geçen pencere (örn 22:00 → 02:00)
+    return cur >= s || cur < e;
+  }
 }
 
 function updateWindow() {
@@ -888,34 +950,34 @@ function updateWindow() {
 function updateReqEst() {
   const start = document.getElementById('winStart')?.value || '19:00';
   const end   = document.getElementById('winEnd')?.value   || '23:00';
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  const mins  = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
-  const total = Math.round((mins / 60) * (3600 / INTERVAL_SEC));
+  const s     = toMins(start);
+  const e     = toMins(end);
+  let mins    = e > s ? e - s : (24*60 - s) + e;
+  const reqPerHour = 3600 / INTERVAL_SEC;
+  const total = Math.round((mins / 60) * reqPerHour);
   const el    = document.getElementById('reqEst');
   if (el) {
-    el.textContent = '~' + total + ' istek/gün';
-    el.style.color  = total > 90 ? 'var(--red)' : total > 60 ? 'var(--yellow)' : 'var(--green)';
+    el.textContent = '~' + total + ' istek/gün (' + Math.floor(mins/60) + 'sa ' + (mins%60) + 'dk pencere)';
+    el.style.color = total > 90 ? 'var(--red)' : total > 60 ? 'var(--yellow)' : 'var(--green)';
   }
 }
 
 function checkWinStatus() {
-  const el = document.getElementById('winStatus');
+  const el    = document.getElementById('winStatus');
   if (!el) return;
+  const start = document.getElementById('winStart')?.value || '19:00';
+  const end   = document.getElementById('winEnd')?.value   || '23:00';
+  const cur   = nowMins();
+  const s     = toMins(start);
+  const e     = toMins(end);
+
   if (isInWindow()) {
-    el.textContent = '✓ Aktif — sorgulama açık';
-    el.style.color  = 'var(--green)';
+    const minsLeft = e > cur ? e - cur : (24*60 - cur) + e;
+    el.textContent = '✓ Aktif — ' + Math.floor(minsLeft/60) + 'sa ' + (minsLeft%60) + 'dk sonra kapanır (' + nowStr() + ')';
+    el.style.color = 'var(--green)';
   } else {
-    const start = document.getElementById('winStart')?.value || '19:00';
-    const [sh, sm] = start.split(':').map(Number);
-    const now = new Date();
-    const cur = now.getHours() * 60 + now.getMinutes();
-    const diff = (sh * 60 + sm) - cur;
-    if (diff > 0) {
-      el.textContent = '⏳ ' + Math.floor(diff/60) + 'sa ' + (diff%60) + 'dk sonra başlar';
-    } else {
-      el.textContent = '💤 Pencere dışı — duraklatıldı';
-    }
+    const minsTo = s > cur ? s - cur : (24*60 - cur) + s;
+    el.textContent = '💤 Kapalı — ' + Math.floor(minsTo/60) + 'sa ' + (minsTo%60) + 'dk sonra başlar (' + nowStr() + ')';
     el.style.color = 'var(--muted)';
   }
 }
@@ -989,9 +1051,34 @@ function clearAll() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+// Mevcut bet loguna göre bankroll'ü yeniden hesapla
+function repairBankroll() {
+  let bankroll = 1000; // başlangıç
+  const sorted = [...appState.bets].sort((a, b) => a.id - b.id);
+  for (const bet of sorted) {
+    bankroll -= bet.stake; // her bet açılınca stake düş
+    if (bet.status === 'settled' && bet.result === 'won') {
+      const payout = 1 / (bet.marketOdds / 100);
+      const gross  = bet.stake * payout;
+      const fee    = gross * 0.02;
+      bankroll += bet.stake + (gross - fee - bet.stake); // stake iade + kar
+    }
+    // loss: stake zaten düşüldü, ekstra yok
+  }
+  appState.bankroll = parseFloat(bankroll.toFixed(2));
+  saveState();
+  updateAll();
+}
+
 window.addEventListener('load', () => {
   updateReqEst();
   checkWinStatus();
+  // Mevcut bet durumuna göre bankroll'ü düzelt
+  repairBankroll();
+  // Sonuç kontrolü her 5 dakikada bir — pencere dışında bile çalışır
+  setInterval(() => {
+    if (appState.apiKey) checkPendingResults();
+  }, 5 * 60 * 1000);
   // Restore API key if saved
   if (appState.apiKey) {
     document.getElementById('apiKeyInput').value = appState.apiKey;
