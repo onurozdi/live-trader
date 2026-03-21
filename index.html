@@ -233,10 +233,57 @@ body::before {
   <!-- Strategy summary -->
   <div class="strategy-box">
     <div class="strat-row"><span class="strat-key">Senaryo</span><span class="strat-val">1-0 Ev Sahibi Önde</span></div>
-    <div class="strat-row"><span class="strat-key">Dakika Eşiği</span><span class="strat-val">75+ dakika</span></div>
+    <div class="strat-row">
+      <span class="strat-key">Dakika Eşiği</span>
+      <select id="minThreshold" onchange="changeMinThreshold(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
+        <option value="75" selected>75+ dk</option>
+        <option value="80">80+ dk</option>
+      </select>
+    </div>
     <div class="strat-row"><span class="strat-key">Oran Zonu</span><span class="strat-val">70-88¢ arası</span></div>
-    <div class="strat-row"><span class="strat-key">Bet Boyutu</span><span class="strat-val">$10 sabit</span></div>
-    <div class="strat-row"><span class="strat-key">Yenileme</span><span class="strat-val" id="refreshInterval">60 sn</span></div>
+    <div class="strat-row">
+      <span class="strat-key">Bet Boyutu</span>
+      <select id="betSizeSelect" onchange="changeBetSize(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
+        <option value="5">$5</option>
+        <option value="10" selected>$10</option>
+        <option value="20">$20</option>
+      </select>
+    </div>
+    <div class="strat-row">
+      <span class="strat-key">Yenileme</span>
+      <select id="selInterval" onchange="changeInterval(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
+        <option value="60">1 dk</option>
+        <option value="120">2 dk</option>
+        <option value="180" selected>3 dk</option>
+        <option value="300">5 dk</option>
+        <option value="420">7 dk</option>
+        <option value="600">10 dk</option>
+      </select>
+    </div>
+    <div class="strat-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <span class="strat-key">Aktif Pencere</span>
+      <div style="display:flex;gap:6px;align-items:center;width:100%;">
+        <select id="winStart" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:3px 8px;outline:none;cursor:pointer;;flex:1;">
+          <option value="00:00">00:00</option><option value="01:00">01:00</option><option value="02:00">02:00</option><option value="03:00">03:00</option><option value="04:00">04:00</option><option value="05:00">05:00</option><option value="06:00">06:00</option><option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00" selected>19:00</option><option value="20:00">20:00</option><option value="21:00">21:00</option><option value="22:00">22:00</option><option value="23:00">23:00</option>
+        </select>
+        <span style="color:var(--muted);">→</span>
+        <select id="winEnd" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:3px 8px;outline:none;cursor:pointer;;flex:1;">
+          <option value="00:00">00:00</option><option value="01:00">01:00</option><option value="02:00">02:00</option><option value="03:00">03:00</option><option value="04:00">04:00</option><option value="05:00">05:00</option><option value="06:00">06:00</option><option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option><option value="21:00">21:00</option><option value="22:00">22:00</option><option value="23:00" selected>23:00</option>
+        </select>
+      </div>
+      <div id="winStatus" style="font-size:10px;color:var(--muted);">— pencere kontrolü</div>
+    </div>
+    <div class="strat-row">
+      <span class="strat-key">Otomatik Bet</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="autoBet" style="width:14px;height:14px;accent-color:var(--green);" onchange="updateAutoBet()">
+        <span id="autoBetLabel" style="font-size:10px;color:var(--muted);">Kapalı</span>
+      </label>
+    </div>
+    <div class="strat-row">
+      <span class="strat-key">Tahmini istek/gün</span>
+      <span id="reqEst" style="color:var(--yellow);font-size:10px;">hesaplanıyor</span>
+    </div>
   </div>
 
   <!-- Live match list -->
@@ -425,14 +472,8 @@ let refreshCountdown = 60;
 
 // API-Football CORS notu:
 // v3.football.api-sports.io → tarayıcıda CORS engeli var
-// api-football-v1.p.rapidapi.com → CORS izinli, tarayıcıdan çalışır
-// Aynı key her iki host'ta da çalışır.
-function apiHeaders(key) {
-  return {
-    'x-rapidapi-key': key,
-    'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-    'x-apisports-key': key
-  };
+// Cloudflare proxy — key sunucu tarafında
+function apiHeaders() { return {}; };
 }
 function apiUrl(path) {
   return '/functions/football?path=' + encodeURIComponent(path);
@@ -480,6 +521,7 @@ async function fetchLiveMatches() {
     const data = await res.json();
     const fixtures = data.response || [];
     renderMatches(fixtures);
+    autoProcessMatches(fixtures);
   } catch(err) {
     showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
   }
@@ -548,6 +590,25 @@ function renderMatches(fixtures) {
   }).join('');
 }
 
+function autoProcessMatches(matches) {
+  if (!autoBetEnabled) return;
+  matches.forEach(f => {
+    const home   = f.teams?.home?.name || '?';
+    const away   = f.teams?.away?.name || '?';
+    const hGoals = f.goals?.home ?? 0;
+    const aGoals = f.goals?.away ?? 0;
+    const elapsed= f.fixture?.status?.elapsed || 0;
+    const fid    = f.fixture?.id;
+    const minT   = appState.minThreshold || 75;
+    if (hGoals !== 1 || aGoals !== 0 || elapsed < minT) return;
+    const already = appState.bets.some(b => b.fixtureId === fid && b.status !== 'void');
+    if (already) return;
+    const estOdds = Math.round(82 + (elapsed - 75) * 0.6);
+    quickBet(fid, home, away, elapsed, estOdds, true);
+    showNotif('🤖 Otomatik bet: ' + home + ' ' + elapsed + ". dk", 'green');
+  });
+}
+
 function quickBet(id, home, away, minute, estOdds, auto = false) {
   const stake = appState.betSize || 10;
   const bet = {
@@ -563,6 +624,8 @@ function quickBet(id, home, away, minute, estOdds, auto = false) {
     edge: (87 + (minute-75)*0.6 - estOdds).toFixed(1)
   };
   appState.bankroll -= stake;
+  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
+  appState.bankroll -= bet.stake;
   appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
   appState.bets.push(bet);
   saveState();
@@ -804,19 +867,57 @@ function drawPLBars() {
   });
 }
 
+// ─── WINDOW HELPERS ──────────────────────────────────────────────────────────
+function toMins(t) { const [h,m]=t.split(':').map(Number); return h*60+m; }
+function nowMins() { const n=new Date(); return n.getHours()*60+n.getMinutes(); }
+function nowStr()  { const n=new Date(); return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
+
+function isInWindow() {
+  const s=toMins(document.getElementById('winStart')?.value||'00:00');
+  const e=toMins(document.getElementById('winEnd')?.value||'23:59');
+  const c=nowMins();
+  return s<=e ? c>=s&&c<e : c>=s||c<e;
+}
+function updateWindow() { updateReqEst(); checkWinStatus(); }
+function updateReqEst() {
+  const s=toMins(document.getElementById('winStart')?.value||'19:00');
+  const e=toMins(document.getElementById('winEnd')?.value||'23:00');
+  const mins=e>s?e-s:(24*60-s)+e;
+  const total=Math.round((mins/60)*(3600/INTERVAL_SEC));
+  const el=document.getElementById('reqEst');
+  if(el){ el.textContent='~'+total+' istek/gün ('+Math.floor(mins/60)+'sa '+(mins%60)+'dk)'; el.style.color=total>90?'var(--red)':total>60?'var(--yellow)':'var(--green)'; }
+}
+function checkWinStatus() {
+  const el=document.getElementById('winStatus'); if(!el) return;
+  const s=toMins(document.getElementById('winStart')?.value||'19:00');
+  const e=toMins(document.getElementById('winEnd')?.value||'23:00');
+  const cur=nowMins();
+  if(isInWindow()){ const left=e>cur?e-cur:(24*60-cur)+e; el.textContent='✓ Aktif — '+Math.floor(left/60)+'sa '+(left%60)+'dk sonra kapanır ('+nowStr()+')'; el.style.color='var(--green)'; }
+  else { const to=s>cur?s-cur:(24*60-cur)+s; el.textContent='💤 Kapalı — '+Math.floor(to/60)+'sa '+(to%60)+'dk sonra başlar ('+nowStr()+')'; el.style.color='var(--muted)'; }
+}
+
 // ─── REFRESH TIMER ────────────────────────────────────────────────────────────
 function startRefreshTimer() {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshCountdown = 60;
+  refreshCountdown = INTERVAL_SEC;
+  updateReqEst();
+  checkWinStatus();
   refreshTimer = setInterval(() => {
+    checkWinStatus();
+    if (!isInWindow()) {
+      document.getElementById('progressFill').style.width = '0%';
+      document.getElementById('refreshTimer').textContent = '💤';
+      return;
+    }
     refreshCountdown--;
-    const pct = ((60 - refreshCountdown) / 60) * 100;
+    const pct = ((INTERVAL_SEC - refreshCountdown) / INTERVAL_SEC) * 100;
     document.getElementById('progressFill').style.width = pct + '%';
-    document.getElementById('refreshTimer').textContent = refreshCountdown + 's';
+    const m = Math.floor(refreshCountdown/60), s = refreshCountdown%60;
+    document.getElementById('refreshTimer').textContent = m>0?m+'m'+s+'s':s+'s';
     if (refreshCountdown <= 0) {
       fetchLiveMatches();
       checkPendingResults();
-      refreshCountdown = 60;
+      refreshCountdown = INTERVAL_SEC;
     }
   }, 1000);
 }
@@ -859,7 +960,24 @@ function clearAll() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+function repairBankroll() {
+  let b = 1000;
+  const sorted = [...appState.bets].sort((a,b)=>a.id-b.id);
+  for (const bet of sorted) {
+    b -= bet.stake;
+    if (bet.status==='settled' && bet.result==='won') {
+      const gross = bet.stake*(1/(bet.marketOdds/100));
+      b += bet.stake + (gross*0.98 - bet.stake);
+    }
+  }
+  appState.bankroll = parseFloat(b.toFixed(2));
+  saveState(); updateAll();
+}
+
 window.addEventListener('load', () => {
+  updateReqEst();
+  checkWinStatus();
+  connectAPI();
   connectAPI(); // Otomatik bağlan
   // API proxy mod — key gerekmez
   updateAll();
