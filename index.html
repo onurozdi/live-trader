@@ -226,12 +226,8 @@ body::before {
 
   <!-- API Setup -->
   <div class="api-setup">
-    <div style="font-size:10px;color:var(--muted);margin-bottom:4px;letter-spacing:1px;">API-FOOTBALL KEY</div>
-    <div class="api-input-row">
-      <input class="api-input" type="password" id="apiKeyInput" placeholder="API key yapıştır...">
-      <button class="btn-sm btn-cyan" onclick="connectAPI()">Bağlan</button>
-    </div>
-    <div class="api-status" id="apiStatus">— api-sports.io · Ücretsiz 100 istek/gün</div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:4px;letter-spacing:1px;">NETLIFY PROXY</div>
+    <div class="api-status" id="apiStatus">Bağlanıyor...</div>
   </div>
 
   <!-- Strategy summary -->
@@ -443,46 +439,31 @@ function apiUrl(path) {
 }
 
 async function connectAPI() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) { showNotif('API key boş olamaz', 'red'); return; }
-
   setAPIStatus('loading', 'Bağlanıyor...');
   try {
-    const res = await fetch(apiUrl('/status'), { headers: apiHeaders(key) });
-
-    if (res.status === 401 || res.status === 403) {
-      setAPIStatus('err', '❌ Geçersiz key — dashboard\'dan tekrar kopyala');
-      return;
-    }
+    const res = await fetch(apiUrl('/status'));
     if (!res.ok) {
-      setAPIStatus('err', '❌ Sunucu hatası: ' + res.status);
+      setAPIStatus('err', 'Netlify Function hatası: ' + res.status);
       return;
     }
-
     const data = await res.json();
     if (data.errors && Object.keys(data.errors).length > 0) {
-      const errMsg = Object.values(data.errors)[0];
-      setAPIStatus('err', '❌ ' + errMsg);
+      setAPIStatus('err', 'API hatası: ' + Object.values(data.errors)[0]);
       return;
     }
-
     const used  = data.response?.requests?.current   || 0;
     const limit = data.response?.requests?.limit_day || 100;
-    appState.apiKey = key;
+    appState.apiKey = 'netlify-proxy';
     saveState();
-
-    setAPIStatus('ok', '✓ Bağlandı · ' + used + '/' + limit + ' istek kullanıldı bugün');
+    setAPIStatus('ok', '✓ Bağlandı · ' + used + '/' + limit + ' istek kullanıldı');
     document.getElementById('liveDot').style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;flex-shrink:0';
     document.getElementById('topStatus').textContent = 'CANLI';
     document.getElementById('topStatus').className = 'topbar-status live';
     document.getElementById('refreshBtn').disabled = false;
-
-    showNotif('✓ API bağlantısı kuruldu!', 'green');
     fetchLiveMatches();
     startRefreshTimer();
-
   } catch(err) {
-    setAPIStatus('err', '❌ Ağ hatası: ' + err.message);
+    setAPIStatus('err', 'Hata: ' + err.message);
   }
 }
 
@@ -879,6 +860,7 @@ function clearAll() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  connectAPI(); // Otomatik bağlan
   // API proxy mod — key gerekmez
   updateAll();
 });
