@@ -476,7 +476,7 @@ let refreshCountdown = 60;
 function apiHeaders() { return {}; };
 }
 function apiUrl(path) {
-  return '/functions/football?path=' + encodeURIComponent(path);
+  return '/api/football?path=' + encodeURIComponent(path);
 }
 
 async function connectAPI() {
