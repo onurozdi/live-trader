@@ -435,7 +435,7 @@ function apiHeaders(key) {
   };
 }
 function apiUrl(path) {
-  return 'https://api-football-v1.p.rapidapi.com/v3' + path;
+  return '/functions/football?path=' + encodeURIComponent(path);
 }
 
 async function connectAPI() {
