@@ -226,9 +226,10 @@ body::before {
 
   <!-- API Setup -->
   <div class="api-setup">
-    <div style="font-size:10px;color:var(--muted);margin-bottom:4px;letter-spacing:1px;">NETLIFY PROXY</div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:4px;letter-spacing:1px;">API-FOOTBALL KEY</div>
     <div class="api-input-row">
-      <button class="btn-sm btn-cyan" onclick="connectAPI()" style="width:100%">Baglan</button>
+      <input class="api-input" type="password" id="apiKeyInput" placeholder="API key yapıştır...">
+      <button class="btn-sm btn-cyan" onclick="connectAPI()">Bağlan</button>
     </div>
     <div class="api-status" id="apiStatus">— api-sports.io · Ücretsiz 100 istek/gün</div>
   </div>
@@ -239,41 +240,7 @@ body::before {
     <div class="strat-row"><span class="strat-key">Dakika Eşiği</span><span class="strat-val">75+ dakika</span></div>
     <div class="strat-row"><span class="strat-key">Oran Zonu</span><span class="strat-val">70-88¢ arası</span></div>
     <div class="strat-row"><span class="strat-key">Bet Boyutu</span><span class="strat-val">$10 sabit</span></div>
-    <div class="strat-row">
-      <span class="strat-key">Yenileme</span>
-      <select id="selInterval" onchange="changeInterval(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
-        <option value="60">1 dk</option>
-        <option value="120">2 dk</option>
-        <option value="180" selected>3 dk</option>
-        <option value="300">5 dk</option>
-        <option value="420">7 dk</option>       
-        <option value="600">10 dk</option>
-      </select>
-    </div>
-    <div class="strat-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-      <span class="strat-key">Aktif Pencere</span>
-      <div style="display:flex;gap:6px;align-items:center;width:100%;">
-        <select id="winStart" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;cursor:pointer;">
-          <option value="00:00">00:00</option><option value="01:00">01:00</option><option value="02:00">02:00</option><option value="03:00">03:00</option><option value="04:00">04:00</option><option value="05:00">05:00</option><option value="06:00">06:00</option><option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00" selected>19:00</option><option value="20:00">20:00</option><option value="21:00">21:00</option><option value="22:00">22:00</option><option value="23:00">23:00</option>
-        </select>
-        <span style="color:var(--muted);">→</span>
-        <select id="winEnd" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;cursor:pointer;">
-          <option value="00:00">00:00</option><option value="01:00">01:00</option><option value="02:00">02:00</option><option value="03:00">03:00</option><option value="04:00">04:00</option><option value="05:00">05:00</option><option value="06:00">06:00</option><option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option><option value="21:00">21:00</option><option value="22:00">22:00</option><option value="23:00" selected>23:00</option>
-        </select>
-      </div>
-      <div id="winStatus" style="font-size:10px;color:var(--muted);">— pencere kontrolü</div>
-    </div>
-    <div class="strat-row">
-      <span class="strat-key">Otomatik Bet</span>
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-        <input type="checkbox" id="autoBet" style="width:14px;height:14px;accent-color:var(--green);" onchange="updateAutoBet()">
-        <span id="autoBetLabel" style="font-size:10px;color:var(--muted);">Kapalı</span>
-      </label>
-    </div>
-    <div class="strat-row">
-      <span class="strat-key">Tahmini istek/gün</span>
-      <span id="reqEst" style="color:var(--yellow);font-size:10px;">hesaplanıyor</span>
-    </div>
+    <div class="strat-row"><span class="strat-key">Yenileme</span><span class="strat-val" id="refreshInterval">60 sn</span></div>
   </div>
 
   <!-- Live match list -->
@@ -449,7 +416,7 @@ function loadState() {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s) return JSON.parse(s);
   } catch(e) {}
-  return { bankroll: 1000, bets: [], apiKey: '' };
+  return { bankroll: 1000, bets: [], apiKey: '', minThreshold: 75, betSize: 10 };
 }
 
 function saveState() {
@@ -460,42 +427,62 @@ function saveState() {
 let refreshTimer = null;
 let refreshCountdown = 60;
 
-// Netlify Function proxy — CORS sorunsuz
+// API-Football CORS notu:
+// v3.football.api-sports.io → tarayıcıda CORS engeli var
+// api-football-v1.p.rapidapi.com → CORS izinli, tarayıcıdan çalışır
+// Aynı key her iki host'ta da çalışır.
 function apiHeaders(key) {
-  return {}; // key sunucu tarafında env variable olarak kullanılıyor
+  return {
+    'x-rapidapi-key': key,
+    'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+    'x-apisports-key': key
+  };
 }
 function apiUrl(path) {
-  return '/.netlify/functions/football?path=' + encodeURIComponent(path);
+  return 'https://api-football-v1.p.rapidapi.com/v3' + path;
 }
 
 async function connectAPI() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { showNotif('API key boş olamaz', 'red'); return; }
+
   setAPIStatus('loading', 'Bağlanıyor...');
   try {
-    const res = await fetch(apiUrl('/status'));
-    if (!res.ok) {
-      setAPIStatus('err', 'Netlify Function hatası: ' + res.status + ' — football.js deploy edildi mi?');
+    const res = await fetch(apiUrl('/status'), { headers: apiHeaders(key) });
+
+    if (res.status === 401 || res.status === 403) {
+      setAPIStatus('err', '❌ Geçersiz key — dashboard\'dan tekrar kopyala');
       return;
     }
+    if (!res.ok) {
+      setAPIStatus('err', '❌ Sunucu hatası: ' + res.status);
+      return;
+    }
+
     const data = await res.json();
     if (data.errors && Object.keys(data.errors).length > 0) {
       const errMsg = Object.values(data.errors)[0];
-      setAPIStatus('err', 'API hatası: ' + errMsg + ' — Environment variable kontrol et');
+      setAPIStatus('err', '❌ ' + errMsg);
       return;
     }
+
     const used  = data.response?.requests?.current   || 0;
     const limit = data.response?.requests?.limit_day || 100;
-    appState.apiKey = 'netlify-proxy';
+    appState.apiKey = key;
     saveState();
-    setAPIStatus('ok', 'Baglandi · ' + used + '/' + limit + ' istek kullanildi bugun');
+
+    setAPIStatus('ok', '✓ Bağlandı · ' + used + '/' + limit + ' istek kullanıldı bugün');
     document.getElementById('liveDot').style.cssText = 'width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;flex-shrink:0';
     document.getElementById('topStatus').textContent = 'CANLI';
     document.getElementById('topStatus').className = 'topbar-status live';
     document.getElementById('refreshBtn').disabled = false;
-    showNotif('API baglantisi kuruldu!', 'green');
+
+    showNotif('✓ API bağlantısı kuruldu!', 'green');
     fetchLiveMatches();
     startRefreshTimer();
+
   } catch(err) {
-    setAPIStatus('err', 'Hata: ' + err.message);
+    setAPIStatus('err', '❌ Ağ hatası: ' + err.message);
   }
 }
 
@@ -512,7 +499,6 @@ async function fetchLiveMatches() {
     const data = await res.json();
     const fixtures = data.response || [];
     renderMatches(fixtures);
-    autoProcessMatches(fixtures);
   } catch(err) {
     showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
   }
@@ -547,8 +533,9 @@ function renderMatches(fixtures) {
     const fixtureId = f.fixture?.id;
 
     // Strategy signal check
-    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= 75;
-    const isNear   = hGoals === 1 && aGoals === 0 && elapsed >= 70 && elapsed < 75;
+    const minT = appState.minThreshold || 75;
+    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= minT;
+    const isNear   = hGoals === 1 && aGoals === 0 && elapsed >= (minT - 5) && elapsed < minT;
 
     // Estimate market odds (placeholder — real odds come from Polymarket)
     const estOdds = Math.round((82 + (elapsed - 75) * 0.6) * 10) / 10;
@@ -575,50 +562,26 @@ function renderMatches(fixtures) {
         <div class="odds-pill" style="font-size:9px;color:var(--muted)">Polymarket'te kontrol et</div>
         <div class="signal-badge ${signalClass}">${signalText}</div>
       </div>
-      ${isTarget ? `<button class="btn-sm btn-green" style="margin-top:10px;width:100%;font-size:10px;" onclick="event.stopPropagation();quickBet(${fixtureId},'${home}','${away}',${elapsed},${estOdds})">+ $10 Bet Kaydet</button>` : ''}
+      ${isTarget ? `<button class="btn-sm btn-green" style="margin-top:10px;width:100%;font-size:10px;" onclick="event.stopPropagation();quickBet(${fixtureId},'${home}','${away}',${elapsed},${estOdds})">+ $${appState.betSize||10} Bet Kaydet</button>` : ''}
     </div>`;
   }).join('');
 }
 
-function autoProcessMatches(matches) {
-  if (!autoBetEnabled) return;
-  matches.forEach(f => {
-    const home    = f.teams?.home?.name || '?';
-    const away    = f.teams?.away?.name || '?';
-    const hGoals  = f.goals?.home ?? 0;
-    const aGoals  = f.goals?.away ?? 0;
-    const elapsed = f.fixture?.status?.elapsed || 0;
-    const fid     = f.fixture?.id;
-
-    // Check signal criteria
-    if (hGoals !== 1 || aGoals !== 0 || elapsed < 75) return;
-
-    // Check if already bet on this fixture
-    const alreadyBet = appState.bets.some(b => b.fixtureId === fid && b.status !== 'void');
-    if (alreadyBet) return;
-
-    // Auto-place bet
-    const estOdds = Math.round(82 + (elapsed - 75) * 0.6);
-    quickBet(fid, home, away, elapsed, estOdds, true);
-    showNotif('🤖 Otomatik bet: ' + home + ' ' + elapsed + ". dk " + estOdds + "c", 'green');
-  });
-}
-
 function quickBet(id, home, away, minute, estOdds, auto = false) {
+  const stake = appState.betSize || 10;
   const bet = {
     id: Date.now(),
     fixtureId: id,
     home, away, minute,
     marketOdds: estOdds,
-    stake: 10,
+    stake: stake,
     status: 'pending',
     result: null,
     pnl: null,
     ts: new Date().toISOString(),
     edge: (87 + (minute-75)*0.6 - estOdds).toFixed(1)
   };
-  // Stake'i hemen bankroll'den düş
-  appState.bankroll -= bet.stake;
+  appState.bankroll -= stake;
   appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
   appState.bets.push(bet);
   saveState();
@@ -649,9 +612,6 @@ function addManualBet() {
     league, status: 'pending', result: null, pnl: null,
     ts: new Date().toISOString(), edge
   };
-  // Stake'i hemen bankroll'den düş
-  appState.bankroll -= bet.stake;
-  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
   appState.bets.push(bet);
   saveState();
   updateAll();
@@ -674,76 +634,42 @@ function renderPendingList() {
 
 function settlebet(id, won) {
   const bet = appState.bets.find(b => b.id === id);
-  if (!bet || bet.status === 'settled') return;
-
+  if (!bet) return;
   const payout = 1 / (bet.marketOdds / 100);
-  const gross  = won ? bet.stake * payout : 0;
-  const fee    = gross * 0.02;
-  const net    = won ? gross - fee - bet.stake : -bet.stake;
+  const gross = won ? bet.stake * payout : 0;
+  const fee = gross * 0.02;
+  const net = won ? gross - fee - bet.stake : -bet.stake;
 
   bet.result = won ? 'won' : 'lost';
-  bet.pnl    = parseFloat(net.toFixed(2));
+  bet.pnl = parseFloat(net.toFixed(2));
   bet.status = 'settled';
-
-  // Stake zaten düşülmüştü — kazanınca geri al + kar ekle, kaybedince hiçbir şey yapma
-  if (won) {
-    appState.bankroll += bet.stake + (gross - fee - bet.stake); // stake iade + net kar
-    appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
-  }
-  // Kaybedince stake zaten düşülmüştü, ekstra işlem yok
+  appState.bankroll += bet.pnl;
+  appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
 
   saveState();
   updateAll();
   renderPendingList();
-  showNotif(
-    won
-      ? `✓ Kazandı! +$${(gross - fee - bet.stake).toFixed(2)} · Bankroll: $${appState.bankroll.toFixed(2)}`
-      : `✗ Kaybetti -$${bet.stake} · Bankroll: $${appState.bankroll.toFixed(2)}`,
-    won ? 'green' : 'red'
-  );
+  showNotif(won ? `✓ Kazandı! +$${(gross - fee - bet.stake).toFixed(2)}` : `✗ Kaybetti -$${bet.stake}`, won ? 'green' : 'red');
 }
 
 // ─── AUTO SETTLE (API) ────────────────────────────────────────────────────────
 async function checkPendingResults() {
   if (!appState.apiKey) return;
   const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
-  if (!pending.length) return;
-
   for (const bet of pending) {
     try {
-      const res  = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId));
+      const res = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId), { headers: apiHeaders(appState.apiKey) });
       const data = await res.json();
-      const f    = data.response?.[0];
+      const f = data.response?.[0];
       if (!f) continue;
-
       const statusShort = f.fixture?.status?.short;
-      const elapsed     = f.fixture?.status?.elapsed || 0;
-
-      // Maç bittiyse sonucu al
-      if (statusShort === 'FT' || statusShort === 'AET' || statusShort === 'PEN') {
+      if (statusShort === 'FT' || statusShort === 'AET') {
         const hGoals = f.goals?.home ?? 0;
         const aGoals = f.goals?.away ?? 0;
-        const won    = hGoals > aGoals; // ev sahibi kazandı mı?
+        const won = hGoals > aGoals; // home win
         settlebet(bet.id, won);
-        showNotif(
-          won
-            ? '✓ ' + bet.home + ' kazandı! +$' + (bet.stake * (1/(bet.marketOdds/100)) - bet.stake).toFixed(2)
-            : '✗ ' + bet.home + ' kaybetti -$' + bet.stake,
-          won ? 'green' : 'red'
-        );
       }
-      // Maç devam ediyorsa skor değiştiyse kontrol et (0-0 veya berabere düştüyse void)
-      else if (statusShort === '2H' || statusShort === 'ET') {
-        const hGoals = f.goals?.home ?? 0;
-        const aGoals = f.goals?.away ?? 0;
-        // Skor artık 1-0 değilse (gol yedik veya eşitlik bozuldu) erken uyarı
-        if (hGoals !== 1 || aGoals !== 0) {
-          showNotif('⚠️ Skor değişti: ' + bet.home + ' ' + hGoals + '-' + aGoals + ' ' + bet.away, 'yellow');
-        }
-      }
-    } catch(e) {
-      console.log('Sonuç kontrol hatası:', e.message);
-    }
+    } catch(e) {}
   }
 }
 
@@ -897,123 +823,19 @@ function drawPLBars() {
   });
 }
 
-// ─── INTERVAL & WINDOW CONTROLS ───────────────────────────────────────────────
-let INTERVAL_SEC = 180;
-let autoBetEnabled = false;
-
-function changeInterval(val) {
-  INTERVAL_SEC = parseInt(val);
-  refreshCountdown = INTERVAL_SEC;
-  updateReqEst();
-  if (appState.apiKey) startRefreshTimer();
-}
-
-function updateAutoBet() {
-  autoBetEnabled = document.getElementById('autoBet').checked;
-  document.getElementById('autoBetLabel').textContent = autoBetEnabled ? 'Açık ✓' : 'Kapalı';
-  document.getElementById('autoBetLabel').style.color = autoBetEnabled ? 'var(--green)' : 'var(--muted)';
-  showNotif(autoBetEnabled ? '🤖 Otomatik bet açıldı — sinyal gelince otomatik kaydeder' : 'Otomatik bet kapatıldı', autoBetEnabled ? 'green' : 'yellow');
-}
-
-function toMins(timeStr) {
-  const [h, m] = timeStr.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function nowMins() {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
-}
-
-function nowStr() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2,'0');
-  const m = String(now.getMinutes()).padStart(2,'0');
-  return h + ':' + m;
-}
-
-function isInWindow() {
-  const start = document.getElementById('winStart')?.value || '00:00';
-  const end   = document.getElementById('winEnd')?.value   || '23:59';
-  const cur   = nowMins();
-  const s     = toMins(start);
-  const e     = toMins(end);
-  // Pencere: start'tan end'e kadar aktif, end geçince kapanır
-  if (s <= e) {
-    return cur >= s && cur < e;
-  } else {
-    // Gece yarısını geçen pencere (örn 22:00 → 02:00)
-    return cur >= s || cur < e;
-  }
-}
-
-function updateWindow() {
-  updateReqEst();
-  checkWinStatus();
-}
-
-function updateReqEst() {
-  const start = document.getElementById('winStart')?.value || '19:00';
-  const end   = document.getElementById('winEnd')?.value   || '23:00';
-  const s     = toMins(start);
-  const e     = toMins(end);
-  let mins    = e > s ? e - s : (24*60 - s) + e;
-  const reqPerHour = 3600 / INTERVAL_SEC;
-  const total = Math.round((mins / 60) * reqPerHour);
-  const el    = document.getElementById('reqEst');
-  if (el) {
-    el.textContent = '~' + total + ' istek/gün (' + Math.floor(mins/60) + 'sa ' + (mins%60) + 'dk pencere)';
-    el.style.color = total > 90 ? 'var(--red)' : total > 60 ? 'var(--yellow)' : 'var(--green)';
-  }
-}
-
-function checkWinStatus() {
-  const el    = document.getElementById('winStatus');
-  if (!el) return;
-  const start = document.getElementById('winStart')?.value || '19:00';
-  const end   = document.getElementById('winEnd')?.value   || '23:00';
-  const cur   = nowMins();
-  const s     = toMins(start);
-  const e     = toMins(end);
-
-  if (isInWindow()) {
-    const minsLeft = e > cur ? e - cur : (24*60 - cur) + e;
-    el.textContent = '✓ Aktif — ' + Math.floor(minsLeft/60) + 'sa ' + (minsLeft%60) + 'dk sonra kapanır (' + nowStr() + ')';
-    el.style.color = 'var(--green)';
-  } else {
-    const minsTo = s > cur ? s - cur : (24*60 - cur) + s;
-    el.textContent = '💤 Kapalı — ' + Math.floor(minsTo/60) + 'sa ' + (minsTo%60) + 'dk sonra başlar (' + nowStr() + ')';
-    el.style.color = 'var(--muted)';
-  }
-}
-
 // ─── REFRESH TIMER ────────────────────────────────────────────────────────────
 function startRefreshTimer() {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshCountdown = INTERVAL_SEC;
-  updateReqEst();
-  checkWinStatus();
-
+  refreshCountdown = 60;
   refreshTimer = setInterval(() => {
-    checkWinStatus();
-
-    if (!isInWindow()) {
-      document.getElementById('progressFill').style.width = '0%';
-      document.getElementById('refreshTimer').textContent = '💤';
-      return;
-    }
-
     refreshCountdown--;
-    const pct = ((INTERVAL_SEC - refreshCountdown) / INTERVAL_SEC) * 100;
+    const pct = ((60 - refreshCountdown) / 60) * 100;
     document.getElementById('progressFill').style.width = pct + '%';
-    const m = Math.floor(refreshCountdown / 60);
-    const s = refreshCountdown % 60;
-    document.getElementById('refreshTimer').textContent = m > 0 ? m + 'm' + s + 's' : s + 's';
-
+    document.getElementById('refreshTimer').textContent = refreshCountdown + 's';
     if (refreshCountdown <= 0) {
       fetchLiveMatches();
       checkPendingResults();
-      refreshCountdown = INTERVAL_SEC;
+      refreshCountdown = 60;
     }
   }, 1000);
 }
@@ -1056,39 +878,8 @@ function clearAll() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-// Mevcut bet loguna göre bankroll'ü yeniden hesapla
-function repairBankroll() {
-  let bankroll = 1000; // başlangıç
-  const sorted = [...appState.bets].sort((a, b) => a.id - b.id);
-  for (const bet of sorted) {
-    bankroll -= bet.stake; // her bet açılınca stake düş
-    if (bet.status === 'settled' && bet.result === 'won') {
-      const payout = 1 / (bet.marketOdds / 100);
-      const gross  = bet.stake * payout;
-      const fee    = gross * 0.02;
-      bankroll += bet.stake + (gross - fee - bet.stake); // stake iade + kar
-    }
-    // loss: stake zaten düşüldü, ekstra yok
-  }
-  appState.bankroll = parseFloat(bankroll.toFixed(2));
-  saveState();
-  updateAll();
-}
-
 window.addEventListener('load', () => {
-  updateReqEst();
-  checkWinStatus();
-  // Mevcut bet durumuna göre bankroll'ü düzelt
-  repairBankroll();
-  // Sonuç kontrolü her 5 dakikada bir — pencere dışında bile çalışır
-  setInterval(() => {
-    if (appState.apiKey) checkPendingResults();
-  }, 5 * 60 * 1000);
-  // Restore API key if saved
-  if (appState.apiKey) {
-    document.getElementById('apiKeyInput').value = appState.apiKey;
-    setAPIStatus('ok', '✓ Kayıtlı key yüklendi — Bağlan\'a tıkla');
-  }
+  // API proxy mod — key gerekmez
   updateAll();
 });
 
