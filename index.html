@@ -239,7 +239,36 @@ body::before {
     <div class="strat-row"><span class="strat-key">Dakika Eşiği</span><span class="strat-val">75+ dakika</span></div>
     <div class="strat-row"><span class="strat-key">Oran Zonu</span><span class="strat-val">70-88¢ arası</span></div>
     <div class="strat-row"><span class="strat-key">Bet Boyutu</span><span class="strat-val">$10 sabit</span></div>
-    <div class="strat-row"><span class="strat-key">Yenileme</span><span class="strat-val" id="refreshInterval">60 sn</span></div>
+    <div class="strat-row">
+      <span class="strat-key">Yenileme</span>
+      <select id="selInterval" onchange="changeInterval(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
+        <option value="60">1 dk</option>
+        <option value="120">2 dk</option>
+        <option value="180" selected>3 dk</option>
+        <option value="300">5 dk</option>
+        <option value="600">10 dk</option>
+      </select>
+    </div>
+    <div class="strat-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <span class="strat-key">Aktif Pencere</span>
+      <div style="display:flex;gap:6px;align-items:center;width:100%;">
+        <input type="time" id="winStart" value="19:00" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;">
+        <span style="color:var(--muted);">to</span>
+        <input type="time" id="winEnd" value="23:00" onchange="updateWindow()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:11px;padding:4px 6px;outline:none;flex:1;">
+      </div>
+      <div id="winStatus" style="font-size:10px;color:var(--muted);">— pencere kontrolü</div>
+    </div>
+    <div class="strat-row">
+      <span class="strat-key">Otomatik Bet</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="autoBet" style="width:14px;height:14px;accent-color:var(--green);" onchange="updateAutoBet()">
+        <span id="autoBetLabel" style="font-size:10px;color:var(--muted);">Kapalı</span>
+      </label>
+    </div>
+    <div class="strat-row">
+      <span class="strat-key">Tahmini istek/gün</span>
+      <span id="reqEst" style="color:var(--yellow);font-size:10px;">hesaplanıyor</span>
+    </div>
   </div>
 
   <!-- Live match list -->
@@ -478,6 +507,7 @@ async function fetchLiveMatches() {
     const data = await res.json();
     const fixtures = data.response || [];
     renderMatches(fixtures);
+    autoProcessMatches(fixtures);
   } catch(err) {
     showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
   }
@@ -545,7 +575,31 @@ function renderMatches(fixtures) {
   }).join('');
 }
 
-function quickBet(id, home, away, minute, estOdds) {
+function autoProcessMatches(matches) {
+  if (!autoBetEnabled) return;
+  matches.forEach(f => {
+    const home    = f.teams?.home?.name || '?';
+    const away    = f.teams?.away?.name || '?';
+    const hGoals  = f.goals?.home ?? 0;
+    const aGoals  = f.goals?.away ?? 0;
+    const elapsed = f.fixture?.status?.elapsed || 0;
+    const fid     = f.fixture?.id;
+
+    // Check signal criteria
+    if (hGoals !== 1 || aGoals !== 0 || elapsed < 75) return;
+
+    // Check if already bet on this fixture
+    const alreadyBet = appState.bets.some(b => b.fixtureId === fid && b.status !== 'void');
+    if (alreadyBet) return;
+
+    // Auto-place bet
+    const estOdds = Math.round(82 + (elapsed - 75) * 0.6);
+    quickBet(fid, home, away, elapsed, estOdds, true);
+    showNotif('🤖 Otomatik bet: ' + home + ' ' + elapsed + ". dk " + estOdds + "c", 'green');
+  });
+}
+
+function quickBet(id, home, away, minute, estOdds, auto = false) {
   const bet = {
     id: Date.now(),
     fixtureId: id,
@@ -798,19 +852,101 @@ function drawPLBars() {
   });
 }
 
+// ─── INTERVAL & WINDOW CONTROLS ───────────────────────────────────────────────
+let INTERVAL_SEC = 180;
+let autoBetEnabled = false;
+
+function changeInterval(val) {
+  INTERVAL_SEC = parseInt(val);
+  refreshCountdown = INTERVAL_SEC;
+  updateReqEst();
+  if (appState.apiKey) startRefreshTimer();
+}
+
+function updateAutoBet() {
+  autoBetEnabled = document.getElementById('autoBet').checked;
+  document.getElementById('autoBetLabel').textContent = autoBetEnabled ? 'Açık ✓' : 'Kapalı';
+  document.getElementById('autoBetLabel').style.color = autoBetEnabled ? 'var(--green)' : 'var(--muted)';
+  showNotif(autoBetEnabled ? '🤖 Otomatik bet açıldı — sinyal gelince otomatik kaydeder' : 'Otomatik bet kapatıldı', autoBetEnabled ? 'green' : 'yellow');
+}
+
+function isInWindow() {
+  const start = document.getElementById('winStart')?.value || '00:00';
+  const end   = document.getElementById('winEnd')?.value   || '23:59';
+  const now   = new Date();
+  const cur   = now.getHours() * 60 + now.getMinutes();
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return cur >= (sh * 60 + sm) && cur <= (eh * 60 + em);
+}
+
+function updateWindow() {
+  updateReqEst();
+  checkWinStatus();
+}
+
+function updateReqEst() {
+  const start = document.getElementById('winStart')?.value || '19:00';
+  const end   = document.getElementById('winEnd')?.value   || '23:00';
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const mins  = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+  const total = Math.round((mins / 60) * (3600 / INTERVAL_SEC));
+  const el    = document.getElementById('reqEst');
+  if (el) {
+    el.textContent = '~' + total + ' istek/gün';
+    el.style.color  = total > 90 ? 'var(--red)' : total > 60 ? 'var(--yellow)' : 'var(--green)';
+  }
+}
+
+function checkWinStatus() {
+  const el = document.getElementById('winStatus');
+  if (!el) return;
+  if (isInWindow()) {
+    el.textContent = '✓ Aktif — sorgulama açık';
+    el.style.color  = 'var(--green)';
+  } else {
+    const start = document.getElementById('winStart')?.value || '19:00';
+    const [sh, sm] = start.split(':').map(Number);
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const diff = (sh * 60 + sm) - cur;
+    if (diff > 0) {
+      el.textContent = '⏳ ' + Math.floor(diff/60) + 'sa ' + (diff%60) + 'dk sonra başlar';
+    } else {
+      el.textContent = '💤 Pencere dışı — duraklatıldı';
+    }
+    el.style.color = 'var(--muted)';
+  }
+}
+
 // ─── REFRESH TIMER ────────────────────────────────────────────────────────────
 function startRefreshTimer() {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshCountdown = 60;
+  refreshCountdown = INTERVAL_SEC;
+  updateReqEst();
+  checkWinStatus();
+
   refreshTimer = setInterval(() => {
+    checkWinStatus();
+
+    if (!isInWindow()) {
+      document.getElementById('progressFill').style.width = '0%';
+      document.getElementById('refreshTimer').textContent = '💤';
+      return;
+    }
+
     refreshCountdown--;
-    const pct = ((60 - refreshCountdown) / 60) * 100;
+    const pct = ((INTERVAL_SEC - refreshCountdown) / INTERVAL_SEC) * 100;
     document.getElementById('progressFill').style.width = pct + '%';
-    document.getElementById('refreshTimer').textContent = refreshCountdown + 's';
+    const m = Math.floor(refreshCountdown / 60);
+    const s = refreshCountdown % 60;
+    document.getElementById('refreshTimer').textContent = m > 0 ? m + 'm' + s + 's' : s + 's';
+
     if (refreshCountdown <= 0) {
       fetchLiveMatches();
       checkPendingResults();
-      refreshCountdown = 60;
+      refreshCountdown = INTERVAL_SEC;
     }
   }, 1000);
 }
@@ -854,6 +990,8 @@ function clearAll() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
+  updateReqEst();
+  checkWinStatus();
   // Restore API key if saved
   if (appState.apiKey) {
     document.getElementById('apiKeyInput').value = appState.apiKey;
