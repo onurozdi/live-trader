@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://polymarket.com;">
 <title>Live Paper Trader</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <style>
@@ -503,40 +503,39 @@ function nowMins() { const n=new Date(); return n.getHours()*60+n.getMinutes(); 
 function nowStr()  { const n=new Date(); return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
 
 function isInWindow() {
-  const s = toMins(document.getElementById('winStart')?.value || '00:00');
-  const e = toMins(document.getElementById('winEnd')?.value || '23:59');
-  const cur = nowMins();
-  return s <= e ? cur >= s && cur < e : cur >= s || cur < e;
+  const s=toMins(document.getElementById('winStart')?.value||'00:00');
+  const e=toMins(document.getElementById('winEnd')?.value||'23:59');
+  const cur=nowMins();
+  return s<=e ? cur>=s&&cur<e : cur>=s||cur<e;
 }
 
 function updateWindow() { updateReqEst(); checkWinStatus(); }
 
 function updateReqEst() {
-  const s = toMins(document.getElementById('winStart')?.value || '19:00');
-  const e = toMins(document.getElementById('winEnd')?.value || '23:00');
-  const mins = e > s ? e - s : (24*60 - s) + e;
-  const total = Math.round((mins/60) * (3600/INTERVAL_SEC));
-  const el = document.getElementById('reqEst');
-  if (el) {
-    el.textContent = '~' + total + ' istek/gün (' + Math.floor(mins/60) + 'sa ' + (mins%60) + 'dk)';
-    el.style.color = total > 90 ? 'var(--red)' : total > 60 ? 'var(--yellow)' : 'var(--green)';
+  const s=toMins(document.getElementById('winStart')?.value||'19:00');
+  const e=toMins(document.getElementById('winEnd')?.value||'23:00');
+  const mins=e>s?e-s:(24*60-s)+e;
+  const total=Math.round((mins/60)*(3600/INTERVAL_SEC));
+  const el=document.getElementById('reqEst');
+  if(el){
+    el.textContent='~'+total+' istek/gün ('+Math.floor(mins/60)+'sa '+(mins%60)+'dk)';
+    el.style.color=total>90?'var(--red)':total>60?'var(--yellow)':'var(--green)';
   }
 }
 
 function checkWinStatus() {
-  const el = document.getElementById('winStatus');
-  if (!el) return;
-  const s = toMins(document.getElementById('winStart')?.value || '19:00');
-  const e = toMins(document.getElementById('winEnd')?.value || '23:00');
-  const cur = nowMins();
-  if (isInWindow()) {
-    const left = e > cur ? e - cur : (24*60 - cur) + e;
-    el.textContent = '✓ Aktif — ' + Math.floor(left/60) + 'sa ' + (left%60) + 'dk sonra kapanır (' + nowStr() + ')';
-    el.style.color = 'var(--green)';
+  const el=document.getElementById('winStatus'); if(!el) return;
+  const s=toMins(document.getElementById('winStart')?.value||'19:00');
+  const e=toMins(document.getElementById('winEnd')?.value||'23:00');
+  const cur=nowMins();
+  if(isInWindow()){
+    const left=e>cur?e-cur:(24*60-cur)+e;
+    el.textContent='✓ Aktif — '+Math.floor(left/60)+'sa '+(left%60)+'dk sonra kapanır ('+nowStr()+')';
+    el.style.color='var(--green)';
   } else {
-    const to = s > cur ? s - cur : (24*60 - cur) + s;
-    el.textContent = '💤 Kapalı — ' + Math.floor(to/60) + 'sa ' + (to%60) + 'dk sonra başlar (' + nowStr() + ')';
-    el.style.color = 'var(--muted)';
+    const to=s>cur?s-cur:(24*60-cur)+s;
+    el.textContent='💤 Kapalı — '+Math.floor(to/60)+'sa '+(to%60)+'dk sonra başlar ('+nowStr()+')';
+    el.style.color='var(--muted)';
   }
 }
 
@@ -583,6 +582,57 @@ function setAPIStatus(type, msg) {
   el.className = 'api-status ' + (type === 'ok' ? 'ok' : type === 'err' ? 'err' : 'loading');
 }
 
+
+// ─── POLYMARKET MATCH ─────────────────────────────────────────────────────────
+let polymarketCache = [];
+let polymarketLastFetch = 0;
+
+async function fetchPolymarketSoccer() {
+  const now = Date.now();
+  // Cache 5 minutes
+  if (polymarketCache.length && now - polymarketLastFetch < 5 * 60 * 1000) return polymarketCache;
+  try {
+    const res = await fetch('/api/polymarket?action=search');
+    const data = await res.json();
+    polymarketCache = Array.isArray(data) ? data : [];
+    polymarketLastFetch = now;
+    return polymarketCache;
+  } catch(e) {
+    return [];
+  }
+}
+
+function findPolymarketMatch(home, away, events) {
+  if (!events || !events.length) return null;
+  const h = home.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const a = away.toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const ev of events) {
+    const title = (ev.title || ev.question || '').toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    const slug  = (ev.slug || '').toLowerCase();
+    if ((title.includes(h) || slug.includes(h)) && (title.includes(a) || slug.includes(a))) {
+      // Find YES market odds
+      const markets = ev.markets || [];
+      const homeWinMarket = markets.find(m => {
+        const q = (m.question || m.outcomePrices || '').toString().toLowerCase();
+        return q.includes('win') || q.includes(h);
+      }) || markets[0];
+      if (homeWinMarket) {
+        const yesPrice = parseFloat(homeWinMarket.outcomePrices?.[0] || homeWinMarket.lastTradePrice || 0);
+        const volume   = parseFloat(ev.volume || ev.volume24hr || 0);
+        return {
+          title: ev.title || ev.question,
+          slug: ev.slug,
+          yesOdds: Math.round(yesPrice * 100),
+          volume: volume,
+          url: 'https://polymarket.com/event/' + ev.slug,
+          market: homeWinMarket
+        };
+      }
+    }
+  }
+  return null;
+}
+
 async function fetchLiveMatches() {
   if (!appState.apiKey) return;
   try {
@@ -591,6 +641,7 @@ async function fetchLiveMatches() {
     const fixtures = data.response || [];
     renderMatches(fixtures);
     autoProcessMatches(fixtures);
+    enrichMatchesWithPolymarket(fixtures);
   } catch(err) {
     showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
   }
@@ -659,6 +710,63 @@ function renderMatches(fixtures) {
   }).join('');
 }
 
+
+async function betWithPolycheck(id, home, away, minute, estOdds) {
+  // Check Polymarket first
+  const events = await fetchPolymarketSoccer();
+  const pmMatch = findPolymarketMatch(home, away, events);
+  const el = document.getElementById('pm-' + id);
+
+  if (pmMatch) {
+    const inOddsRange = pmMatch.yesOdds >= 70 && pmMatch.yesOdds <= 88;
+    const hasVolume   = pmMatch.volume >= 50000;
+    if (el) {
+      if (inOddsRange && hasVolume) {
+        el.innerHTML = '✅ Polymarket: <a href="' + pmMatch.url + '" target="_blank" style="color:var(--green)">' + pmMatch.yesOdds + '¢ · $' + Math.round(pmMatch.volume/1000) + 'K hacim</a>';
+        el.style.color = 'var(--green)';
+      } else {
+        el.innerHTML = '⚠️ Polymarket var ama filtre dışı: ' + pmMatch.yesOdds + '¢ · $' + Math.round(pmMatch.volume/1000) + 'K';
+        el.style.color = 'var(--yellow)';
+      }
+    }
+    // Use Polymarket odds if available and in range
+    const finalOdds = (inOddsRange && hasVolume) ? pmMatch.yesOdds : estOdds;
+    quickBet(id, home, away, minute, finalOdds, false, pmMatch.url);
+  } else {
+    if (el) {
+      el.textContent = '❌ Polymarket'te bulunamadı — Football API oranı kullanılıyor';
+      el.style.color = 'var(--muted)';
+    }
+    quickBet(id, home, away, minute, estOdds, false, null);
+  }
+}
+
+
+async function enrichMatchesWithPolymarket(fixtures) {
+  const events = await fetchPolymarketSoccer();
+  fixtures.forEach(f => {
+    const home = f.teams?.home?.name || '?';
+    const away = f.teams?.away?.name || '?';
+    const elapsed = f.fixture?.status?.elapsed || 0;
+    const fid = f.fixture?.id;
+    const minT = appState.minThreshold || 75;
+    if (f.goals?.home !== 1 || f.goals?.away !== 0 || elapsed < minT) return;
+    const pmMatch = findPolymarketMatch(home, away, events);
+    const el = document.getElementById('pm-' + fid);
+    if (!el) return;
+    if (pmMatch) {
+      const ok = pmMatch.yesOdds >= 70 && pmMatch.yesOdds <= 88 && pmMatch.volume >= 50000;
+      el.innerHTML = ok
+        ? '✅ PM: <a href="' + pmMatch.url + '" target="_blank" style="color:var(--green)">' + pmMatch.yesOdds + '¢ · $' + Math.round(pmMatch.volume/1000) + 'K</a>'
+        : '⚠️ PM var, filtre dışı: ' + pmMatch.yesOdds + '¢';
+      el.style.color = ok ? 'var(--green)' : 'var(--yellow)';
+    } else {
+      el.textContent = '❌ Polymarket'te yok';
+      el.style.color = '#4a5a75';
+    }
+  });
+}
+
 function autoProcessMatches(matches) {
   if (!autoBetEnabled) return;
   matches.forEach(f => {
@@ -678,7 +786,7 @@ function autoProcessMatches(matches) {
   });
 }
 
-function quickBet(id, home, away, minute, estOdds, auto = false) {
+function quickBet(id, home, away, minute, estOdds, auto = false, pmUrl = null) {
   const stake = appState.betSize || 10;
   const bet = {
     id: Date.now(),
@@ -690,7 +798,8 @@ function quickBet(id, home, away, minute, estOdds, auto = false) {
     result: null,
     pnl: null,
     ts: new Date().toISOString(),
-    edge: (87 + (minute-75)*0.6 - estOdds).toFixed(1)
+    edge: (87 + (minute-75)*0.6 - estOdds).toFixed(1),
+    pmUrl: pmUrl
   };
   appState.bankroll -= stake;
   appState.bankroll = parseFloat(appState.bankroll.toFixed(2));
@@ -835,7 +944,7 @@ function renderBetLog() {
     const pnlColor = b.pnl > 0 ? 'var(--green)' : b.pnl < 0 ? 'var(--red)' : 'var(--muted)';
     return `<tr class="${b.status === 'pending' ? 'pending' : ''}">
       <td style="color:var(--muted)">${appState.bets.length - i}</td>
-      <td>${b.home} <span style="color:var(--muted)">vs</span> ${b.away}</td>
+      <td>${b.home} <span style="color:var(--muted)">vs</span> ${b.away}${b.pmUrl ? ` <a href="${b.pmUrl}" target="_blank" style="color:var(--cyan);font-size:9px;">PM↗</a>` : ''}</td>
       <td><span style="color:var(--cyan)">${b.minute}'</span></td>
       <td>${b.marketOdds}¢</td>
       <td style="color:var(--green)">+${b.edge}pp</td>
