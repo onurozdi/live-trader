@@ -734,7 +734,7 @@ async function betWithPolycheck(id, home, away, minute, estOdds) {
     quickBet(id, home, away, minute, finalOdds, false, pmMatch.url);
   } else {
     if (el) {
-      el.textContent = '❌ Polymarket'te bulunamadı — Football API oranı kullanılıyor';
+      el.textContent = '❌ Polymarkette bulunamadı — Football API orani kullaniliyor';
       el.style.color = 'var(--muted)';
     }
     quickBet(id, home, away, minute, estOdds, false, null);
@@ -761,7 +761,7 @@ async function enrichMatchesWithPolymarket(fixtures) {
         : '⚠️ PM var, filtre dışı: ' + pmMatch.yesOdds + '¢';
       el.style.color = ok ? 'var(--green)' : 'var(--yellow)';
     } else {
-      el.textContent = '❌ Polymarket'te yok';
+      el.textContent = '❌ Polymarkette yok';
       el.style.color = '#4a5a75';
     }
   });
