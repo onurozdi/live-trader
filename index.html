@@ -473,6 +473,73 @@ let refreshCountdown = 180;
 let INTERVAL_SEC = 180;
 let autoBetEnabled = false;
 
+function updateAutoBet() {
+  autoBetEnabled = document.getElementById('autoBet').checked;
+  const label = document.getElementById('autoBetLabel');
+  label.textContent = autoBetEnabled ? 'Açık ✓' : 'Kapalı';
+  label.style.color = autoBetEnabled ? 'var(--green)' : 'var(--muted)';
+  showNotif(autoBetEnabled ? '🤖 Otomatik bet açıldı' : 'Otomatik bet kapatıldı', autoBetEnabled ? 'green' : 'yellow');
+}
+
+function changeInterval(val) {
+  INTERVAL_SEC = parseInt(val);
+  refreshCountdown = INTERVAL_SEC;
+  updateReqEst();
+  if (appState.apiKey) startRefreshTimer();
+}
+
+function changeMinThreshold(val) {
+  appState.minThreshold = parseInt(val);
+  saveState();
+}
+
+function changeBetSize(val) {
+  appState.betSize = parseInt(val);
+  saveState();
+}
+
+function toMins(t) { const [h,m]=t.split(':').map(Number); return h*60+m; }
+function nowMins() { const n=new Date(); return n.getHours()*60+n.getMinutes(); }
+function nowStr()  { const n=new Date(); return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
+
+function isInWindow() {
+  const s = toMins(document.getElementById('winStart')?.value || '00:00');
+  const e = toMins(document.getElementById('winEnd')?.value || '23:59');
+  const cur = nowMins();
+  return s <= e ? cur >= s && cur < e : cur >= s || cur < e;
+}
+
+function updateWindow() { updateReqEst(); checkWinStatus(); }
+
+function updateReqEst() {
+  const s = toMins(document.getElementById('winStart')?.value || '19:00');
+  const e = toMins(document.getElementById('winEnd')?.value || '23:00');
+  const mins = e > s ? e - s : (24*60 - s) + e;
+  const total = Math.round((mins/60) * (3600/INTERVAL_SEC));
+  const el = document.getElementById('reqEst');
+  if (el) {
+    el.textContent = '~' + total + ' istek/gün (' + Math.floor(mins/60) + 'sa ' + (mins%60) + 'dk)';
+    el.style.color = total > 90 ? 'var(--red)' : total > 60 ? 'var(--yellow)' : 'var(--green)';
+  }
+}
+
+function checkWinStatus() {
+  const el = document.getElementById('winStatus');
+  if (!el) return;
+  const s = toMins(document.getElementById('winStart')?.value || '19:00');
+  const e = toMins(document.getElementById('winEnd')?.value || '23:00');
+  const cur = nowMins();
+  if (isInWindow()) {
+    const left = e > cur ? e - cur : (24*60 - cur) + e;
+    el.textContent = '✓ Aktif — ' + Math.floor(left/60) + 'sa ' + (left%60) + 'dk sonra kapanır (' + nowStr() + ')';
+    el.style.color = 'var(--green)';
+  } else {
+    const to = s > cur ? s - cur : (24*60 - cur) + s;
+    el.textContent = '💤 Kapalı — ' + Math.floor(to/60) + 'sa ' + (to%60) + 'dk sonra başlar (' + nowStr() + ')';
+    el.style.color = 'var(--muted)';
+  }
+}
+
 // API-Football CORS notu:
 // v3.football.api-sports.io → tarayıcıda CORS engeli var
 // Cloudflare proxy — key sunucu tarafında
