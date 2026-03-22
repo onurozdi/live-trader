@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self';">
 <title>Live Paper Trader</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <style>
@@ -473,8 +474,7 @@ let refreshCountdown = 60;
 // API-Football CORS notu:
 // v3.football.api-sports.io → tarayıcıda CORS engeli var
 // Cloudflare proxy — key sunucu tarafında
-function apiHeaders() { return {}; };
-}
+function apiHeaders() { return {}; }
 function apiUrl(path) {
   return '/api/football?path=' + encodeURIComponent(path);
 }
