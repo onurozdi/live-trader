@@ -469,12 +469,15 @@ function saveState() {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 let refreshTimer = null;
-let refreshCountdown = 60;
+let refreshCountdown = 180;
+let INTERVAL_SEC = 180;
+let autoBetEnabled = false;
 
 // API-Football CORS notu:
 // v3.football.api-sports.io → tarayıcıda CORS engeli var
 // Cloudflare proxy — key sunucu tarafında
-function apiHeaders() { return {}; }
+function apiHeaders() { return {}; };
+}
 function apiUrl(path) {
   return '/api/football?path=' + encodeURIComponent(path);
 }
@@ -978,7 +981,6 @@ window.addEventListener('load', () => {
   updateReqEst();
   checkWinStatus();
   connectAPI();
-  connectAPI(); // Otomatik bağlan
   // API proxy mod — key gerekmez
   updateAll();
 });
