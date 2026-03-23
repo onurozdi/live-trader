@@ -244,7 +244,11 @@ body::before {
     <div class="strat-row"><span class="strat-key">Oran Zonu</span><span class="strat-val">70-88¢ arası</span></div>
     <div class="strat-row">
       <span class="strat-key">Bet Boyutu</span>
-      <select id="betSizePct" onchange="changeBetSizePct(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;"><option value="5">%5</option><option value="10" selected>%10</option><option value="20">%20</option><option value="30">%30</option></select>
+      <select id="betSizeSelect" onchange="changeBetSize(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
+        <option value="5">$5</option>
+        <option value="10" selected>$10</option>
+        <option value="20">$20</option>
+      </select>
     </div>
     <div class="strat-row">
       <span class="strat-key">Yenileme</span>
@@ -456,7 +460,7 @@ function loadState() {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s) return JSON.parse(s);
   } catch(e) {}
-  return { bankroll: 1000, bets: [], apiKey: '', minThreshold: 75, betSize: 10, betSizePct: 10 };
+  return { bankroll: 1000, bets: [], apiKey: '', minThreshold: 75, betSize: 10 };
 }
 
 function saveState() {
@@ -486,11 +490,6 @@ function changeInterval(val) {
 
 function changeMinThreshold(val) {
   appState.minThreshold = parseInt(val);
-  saveState();
-}
-
-function changeBetSizePct(val) {
-  appState.betSizePct = parseInt(val);
   saveState();
 }
 
@@ -584,6 +583,34 @@ function setAPIStatus(type, msg) {
 }
 
 
+
+// Polymarket'te aktif olan ligler — whitelist
+const POLYMARKET_LEAGUES = new Set([
+  // Avrupa Big 5
+  39,   // Premier League
+  140,  // La Liga
+  78,   // Bundesliga
+  135,  // Serie A
+  61,   // Ligue 1
+  // Avrupa kupaları
+  2,    // Champions League
+  3,    // Europa League
+  848,  // Conference League
+  // Diğer aktif
+  94,   // Primeira Liga
+  88,   // Eredivisie
+  144,  // Jupiler Pro League
+  203,  // Super Lig
+  307,  // Saudi Pro League
+  253,  // MLS
+  71,   // Brasileirao
+  239,  // Scottish Premiership
+]);
+
+function isPolymarketLeague(leagueId) {
+  return POLYMARKET_LEAGUES.has(parseInt(leagueId));
+}
+
 // ─── POLYMARKET MATCH ─────────────────────────────────────────────────────────
 let polymarketCache = [];
 let polymarketLastFetch = 0;
@@ -637,14 +664,12 @@ function findPolymarketMatch(home, away, events) {
 async function fetchLiveMatches() {
   if (!appState.apiKey) return;
   try {
-    const res = await fetch(apiUrl('/fixtures?live=all'));
+    const res = await fetch(apiUrl('/fixtures?live=all'), { headers: apiHeaders(appState.apiKey) });
     const data = await res.json();
     const fixtures = data.response || [];
-    _lastLiveFixtures = fixtures; // cache for checkPendingResults
     renderMatches(fixtures);
     autoProcessMatches(fixtures);
     enrichMatchesWithPolymarket(fixtures);
-    checkPendingAgainstLive(fixtures); // 0 ekstra istek
   } catch(err) {
     showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
   }
@@ -656,7 +681,8 @@ function renderMatches(fixtures) {
   // Filter: only football, ongoing
   const live = fixtures.filter(f => {
     const elapsed = f.fixture?.status?.elapsed || 0;
-    return elapsed >= 70; // show matches 70+ min for awareness
+    const lid = f.league?.id || 0;
+    return elapsed >= 70 && isPolymarketLeague(lid);
   });
 
   if (!live.length) {
@@ -680,14 +706,13 @@ function renderMatches(fixtures) {
 
     // Strategy signal check
     const minT = appState.minThreshold || 75;
-    const estOddsCheck = Math.round(82 + (elapsed - 75) * 0.6);
-    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= minT && estOddsCheck >= 70 && estOddsCheck <= 88;
+    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= minT;
     const isNear   = hGoals === 1 && aGoals === 0 && elapsed >= (minT - 5) && elapsed < minT;
 
     // Estimate market odds (placeholder — real odds come from Polymarket)
     const estOdds = Math.round((82 + (elapsed - 75) * 0.6) * 10) / 10;
     const signalClass = isTarget ? 'go' : isNear ? 'wait' : 'skip';
-    const signalText = isTarget ? 'SİNYAL' : isNear ? 'YAKLAŞIYOR' : 'FİLTRE DIŞI';
+    const signalText = isTarget ? 'SİNYAL' : isNear ? 'YAKLAŞIYOR' : !inWhitelist ? 'LİG DIŞI' : 'FİLTRE DIŞI';
     const cardClass = isTarget ? 'signal' : isNear ? '' : 'no-signal';
 
     return `
@@ -741,8 +766,7 @@ async function betWithPolycheck(id, home, away, minute, estOdds) {
       el.textContent = '❌ Polymarkette bulunamadı — Football API orani kullaniliyor';
       el.style.color = 'var(--muted)';
     }
-    showNotif('❌ ' + home + ' Polymarkette yok — bet atlanıyor', 'yellow');
-    return;
+    quickBet(id, home, away, minute, estOdds, false, null);
   }
 }
 
@@ -755,7 +779,9 @@ async function enrichMatchesWithPolymarket(fixtures) {
     const elapsed = f.fixture?.status?.elapsed || 0;
     const fid = f.fixture?.id;
     const minT = appState.minThreshold || 75;
+    const leagueId3 = f.league?.id || 0;
     if (f.goals?.home !== 1 || f.goals?.away !== 0 || elapsed < minT) return;
+    if (!isPolymarketLeague(leagueId3)) return;
     const pmMatch = findPolymarketMatch(home, away, events);
     const el = document.getElementById('pm-' + fid);
     if (!el) return;
@@ -782,7 +808,11 @@ function autoProcessMatches(matches) {
     const elapsed= f.fixture?.status?.elapsed || 0;
     const fid    = f.fixture?.id;
     const minT   = appState.minThreshold || 75;
+    const leagueId = f.league?.id || 0;
+    const estOddsA = Math.round(82 + (elapsed - 75) * 0.6);
     if (hGoals !== 1 || aGoals !== 0 || elapsed < minT) return;
+    if (!isPolymarketLeague(leagueId)) return; // whitelist dışı lig
+    if (estOddsA < 70 || estOddsA > 88) return; // oran zonu
     const already = appState.bets.some(b => b.fixtureId === fid && b.status !== 'void');
     if (already) return;
     const estOdds = Math.round(82 + (elapsed - 75) * 0.6);
@@ -792,8 +822,7 @@ function autoProcessMatches(matches) {
 }
 
 function quickBet(id, home, away, minute, estOdds, auto = false, pmUrl = null) {
-  const pct = appState.betSizePct || 10;
-  const stake = Math.max(1, parseFloat((appState.bankroll * pct / 100).toFixed(2)));
+  const stake = appState.betSize || 10;
   const bet = {
     id: Date.now(),
     fixtureId: id,
@@ -881,58 +910,23 @@ function settlebet(id, won) {
 }
 
 // ─── AUTO SETTLE (API) ────────────────────────────────────────────────────────
-// liveFixtures: fetchLiveMatches'ten gelen maç listesi (0 ekstra istek)
-let _lastLiveFixtures = [];
-
-function checkPendingAgainstLive(liveFixtures) {
-  // Canlı maç listesinde skor değişmişse erken uyar
-  const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
-  pending.forEach(bet => {
-    const f = liveFixtures.find(f => f.fixture?.id === bet.fixtureId);
-    if (!f) return;
-    const hGoals = f.goals?.home ?? 0;
-    const aGoals = f.goals?.away ?? 0;
-    if (hGoals !== 1 || aGoals !== 0) {
-      showNotif('⚠️ Skor değişti: ' + bet.home + ' ' + hGoals + '-' + aGoals + ' ' + bet.away, 'yellow');
-    }
-  });
-}
-
 async function checkPendingResults() {
   if (!appState.apiKey) return;
   const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
-  if (!pending.length) return;
-
-  // Live listede olan maçlar zaten güncel — sadece live'da OLMAYANLARI sorgula
-  const liveIds = new Set(_lastLiveFixtures.map(f => f.fixture?.id));
-  const needCheck = pending.filter(b => !liveIds.has(b.fixtureId));
-  if (!needCheck.length) return;
-
-  // TEK TOPLU REQUEST: ?ids=id1,id2,id3 — N bet = 1 istek
-  const ids = needCheck.map(b => b.fixtureId).join('-');
-  try {
-    const res  = await fetch(apiUrl('/fixtures?ids=' + ids));
-    const data = await res.json();
-    const fixtures = data.response || [];
-
-    fixtures.forEach(f => {
+  for (const bet of pending) {
+    try {
+      const res = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId), { headers: apiHeaders(appState.apiKey) });
+      const data = await res.json();
+      const f = data.response?.[0];
+      if (!f) continue;
       const statusShort = f.fixture?.status?.short;
-      if (statusShort !== 'FT' && statusShort !== 'AET' && statusShort !== 'PEN') return;
-      const fid  = f.fixture?.id;
-      const bet  = needCheck.find(b => b.fixtureId === fid);
-      if (!bet) return;
-      const hGoals = f.goals?.home ?? 0;
-      const aGoals = f.goals?.away ?? 0;
-      const won = hGoals > aGoals;
-      settlebet(bet.id, won);
-      showNotif(
-        won ? '✓ ' + bet.home + ' kazandı! +$' + (bet.stake*(1/(bet.marketOdds/100))*0.98-bet.stake).toFixed(2)
-            : '✗ ' + bet.home + ' kaybetti -$' + bet.stake,
-        won ? 'green' : 'red'
-      );
-    });
-  } catch(e) {
-    console.log('Sonuç kontrol hatası:', e.message);
+      if (statusShort === 'FT' || statusShort === 'AET') {
+        const hGoals = f.goals?.home ?? 0;
+        const aGoals = f.goals?.away ?? 0;
+        const won = hGoals > aGoals; // home win
+        settlebet(bet.id, won);
+      }
+    } catch(e) {}
   }
 }
 
@@ -943,13 +937,11 @@ function updateAll() {
   const wins = settled.filter(b => b.result === 'won').length;
   const totalPL = settled.reduce((s, b) => s + b.pnl, 0);
   const hitRate = settled.length ? (wins / settled.length * 100).toFixed(1) : null;
-  const totalStaked = settled.reduce((s,b)=>s+b.stake,0);
-  const roi = totalStaked > 0 ? (totalPL / totalStaked * 100).toFixed(1) : null;
+  const roi = settled.length ? (totalPL / (settled.length * 10) * 100).toFixed(1) : null;
 
   // Topbar
   document.getElementById('topBankroll').textContent = '$' + appState.bankroll.toFixed(2);
-  const settledPL = appState.bets.filter(b=>b.status==='settled').reduce((s,b)=>s+b.pnl,0);
-  const initPL = settledPL;
+  const initPL = appState.bankroll - 1000;
   document.getElementById('topPL').textContent = (initPL >= 0 ? '+' : '') + '$' + initPL.toFixed(2);
   document.getElementById('topPL').style.color = initPL >= 0 ? 'var(--green)' : 'var(--red)';
 
