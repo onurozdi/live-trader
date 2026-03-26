@@ -244,10 +244,11 @@ body::before {
     <div class="strat-row"><span class="strat-key">Oran Zonu</span><span class="strat-val">70-88¢ arası</span></div>
     <div class="strat-row">
       <span class="strat-key">Bet Boyutu</span>
-      <select id="betSizeSelect" onchange="changeBetSize(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
-        <option value="5">$5</option>
-        <option value="10" selected>$10</option>
-        <option value="20">$20</option>
+      <select id="betSizePct" onchange="changeBetSizePct(this.value)" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--cyan);font-family:var(--font);font-size:10px;padding:3px 8px;outline:none;cursor:pointer;">
+        <option value="5">%5</option>
+        <option value="10" selected>%10</option>
+        <option value="15">%15</option>
+        <option value="20">%20</option>
       </select>
     </div>
     <div class="strat-row">
@@ -460,7 +461,7 @@ function loadState() {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s) return JSON.parse(s);
   } catch(e) {}
-  return { bankroll: 1000, bets: [], apiKey: '', minThreshold: 75, betSize: 10 };
+  return { bankroll: 1000, bets: [], apiKey: '', minThreshold: 75, betSize: 10, betSizePct: 10 };
 }
 
 function saveState() {
@@ -490,6 +491,11 @@ function changeInterval(val) {
 
 function changeMinThreshold(val) {
   appState.minThreshold = parseInt(val);
+  saveState();
+}
+
+function changeBetSizePct(val) {
+  appState.betSizePct = parseInt(val);
   saveState();
 }
 
@@ -596,7 +602,7 @@ const POLYMARKET_LEAGUES = new Set([
   2,    // Champions League
   3,    // Europa League
   848,  // Conference League
-  // Diğer aktif
+  // Diğer kulüp ligleri
   94,   // Primeira Liga
   88,   // Eredivisie
   144,  // Jupiler Pro League
@@ -605,6 +611,24 @@ const POLYMARKET_LEAGUES = new Set([
   253,  // MLS
   71,   // Brasileirao
   239,  // Scottish Premiership
+  // Uluslararası — Dünya Kupası & Elemeler
+  1,    // Dünya Kupası
+  32,   // UEFA WC Elemeleri
+  30,   // AFC WC Elemeleri
+  31,   // CAF WC Elemeleri
+  33,   // CONMEBOL WC Elemeleri
+  34,   // CONCACAF WC Elemeleri
+  // UEFA Uluslar Ligi
+  5,    // UEFA Nations League
+  // Kıta Şampiyonaları
+  4,    // EURO
+  9,    // Copa America
+  6,    // Africa Cup (AFCON)
+  7,    // Asian Cup
+  8,    // CONCACAF Gold Cup
+  // Genel uluslararası A maçları
+  10,   // Friendlies (A Milli)
+  667,  // Friendlies (Uluslararası)
 ]);
 
 function isPolymarketLeague(leagueId) {
@@ -667,9 +691,11 @@ async function fetchLiveMatches() {
     const res = await fetch(apiUrl('/fixtures?live=all'), { headers: apiHeaders(appState.apiKey) });
     const data = await res.json();
     const fixtures = data.response || [];
+    _lastLiveFixtures = fixtures;
     renderMatches(fixtures);
     autoProcessMatches(fixtures);
     enrichMatchesWithPolymarket(fixtures);
+    checkPendingAgainstLive(fixtures);
   } catch(err) {
     showNotif('Maç verisi çekilemedi: ' + err.message, 'yellow');
   }
@@ -706,8 +732,11 @@ function renderMatches(fixtures) {
 
     // Strategy signal check
     const minT = appState.minThreshold || 75;
-    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= minT;
-    const isNear   = hGoals === 1 && aGoals === 0 && elapsed >= (minT - 5) && elapsed < minT;
+    const leagueId = f.league?.id || 0;
+    const inWhitelist = isPolymarketLeague(leagueId);
+    const estOddsChk = Math.round(82 + (elapsed - 75) * 0.6);
+    const isTarget = hGoals === 1 && aGoals === 0 && elapsed >= minT && inWhitelist && estOddsChk >= 70 && estOddsChk <= 88;
+    const isNear   = hGoals === 1 && aGoals === 0 && elapsed >= (minT - 5) && elapsed < minT && inWhitelist;
 
     // Estimate market odds (placeholder — real odds come from Polymarket)
     const estOdds = Math.round((82 + (elapsed - 75) * 0.6) * 10) / 10;
@@ -822,7 +851,8 @@ function autoProcessMatches(matches) {
 }
 
 function quickBet(id, home, away, minute, estOdds, auto = false, pmUrl = null) {
-  const stake = appState.betSize || 10;
+  const pct = appState.betSizePct || 10;
+  const stake = Math.max(1, parseFloat((appState.bankroll * pct / 100).toFixed(2)));
   const bet = {
     id: Date.now(),
     fixtureId: id,
@@ -910,24 +940,46 @@ function settlebet(id, won) {
 }
 
 // ─── AUTO SETTLE (API) ────────────────────────────────────────────────────────
+let _lastLiveFixtures = [];
+
+function checkPendingAgainstLive(liveFixtures) {
+  const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
+  pending.forEach(bet => {
+    const f = liveFixtures.find(f => f.fixture?.id === bet.fixtureId);
+    if (!f) return;
+    const hGoals = f.goals?.home ?? 0;
+    const aGoals = f.goals?.away ?? 0;
+    if (hGoals !== 1 || aGoals !== 0) {
+      showNotif('⚠️ Skor değişti: ' + bet.home + ' ' + hGoals + '-' + aGoals + ' ' + bet.away, 'yellow');
+    }
+  });
+}
+
 async function checkPendingResults() {
   if (!appState.apiKey) return;
   const pending = appState.bets.filter(b => b.status === 'pending' && b.fixtureId);
-  for (const bet of pending) {
-    try {
-      const res = await fetch(apiUrl('/fixtures?id=' + bet.fixtureId), { headers: apiHeaders(appState.apiKey) });
-      const data = await res.json();
-      const f = data.response?.[0];
-      if (!f) continue;
+  if (!pending.length) return;
+  const liveIds = new Set((_lastLiveFixtures||[]).map(f => f.fixture?.id));
+  const needCheck = pending.filter(b => !liveIds.has(b.fixtureId));
+  if (!needCheck.length) return;
+  const ids = needCheck.map(b => b.fixtureId).join('-');
+  try {
+    const res = await fetch(apiUrl('/fixtures?ids=' + ids));
+    const data = await res.json();
+    (data.response || []).forEach(f => {
       const statusShort = f.fixture?.status?.short;
-      if (statusShort === 'FT' || statusShort === 'AET') {
-        const hGoals = f.goals?.home ?? 0;
-        const aGoals = f.goals?.away ?? 0;
-        const won = hGoals > aGoals; // home win
-        settlebet(bet.id, won);
-      }
-    } catch(e) {}
-  }
+      if (statusShort !== 'FT' && statusShort !== 'AET' && statusShort !== 'PEN') return;
+      const fid = f.fixture?.id;
+      const bet = needCheck.find(b => b.fixtureId === fid);
+      if (!bet) return;
+      const won = (f.goals?.home ?? 0) > (f.goals?.away ?? 0);
+      settlebet(bet.id, won);
+      showNotif(won
+        ? '✓ ' + bet.home + ' kazandı!'
+        : '✗ ' + bet.home + ' kaybetti -$' + bet.stake,
+        won ? 'green' : 'red');
+    });
+  } catch(e) { console.log('Pending check error:', e.message); }
 }
 
 // ─── UI UPDATES ───────────────────────────────────────────────────────────────
@@ -937,11 +989,13 @@ function updateAll() {
   const wins = settled.filter(b => b.result === 'won').length;
   const totalPL = settled.reduce((s, b) => s + b.pnl, 0);
   const hitRate = settled.length ? (wins / settled.length * 100).toFixed(1) : null;
-  const roi = settled.length ? (totalPL / (settled.length * 10) * 100).toFixed(1) : null;
+  const totalStaked = settled.reduce((s,b)=>s+b.stake,0);
+  const roi = totalStaked > 0 ? (totalPL / totalStaked * 100).toFixed(1) : null;
 
   // Topbar
   document.getElementById('topBankroll').textContent = '$' + appState.bankroll.toFixed(2);
-  const initPL = appState.bankroll - 1000;
+  const settledPL = appState.bets.filter(b=>b.status==='settled').reduce((s,b)=>s+b.pnl,0);
+  const initPL = settledPL;
   document.getElementById('topPL').textContent = (initPL >= 0 ? '+' : '') + '$' + initPL.toFixed(2);
   document.getElementById('topPL').style.color = initPL >= 0 ? 'var(--green)' : 'var(--red)';
 
